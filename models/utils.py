@@ -47,7 +47,7 @@ class EarlyStopper(object):
             self.best_accuracy = accuracy
             self.trial_counter = 0
             os.makedirs(self.save_path, exist_ok=True)
-            torch.save(model, self.save_path)
+            torch.save(model.state_dict(), os.path.join(self.save_path, 'model.pth'))
             return True
         elif self.trial_counter + 1 < self.num_trials:
             self.trial_counter += 1
