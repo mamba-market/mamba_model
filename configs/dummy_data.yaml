@@ -1,0 +1,25 @@
+# Configs to generate dummy data
+n_rows: 1200
+n_players: 10
+score_ids:
+  - "A"
+  - "B"
+  - "C"
+  - "D"
+  - "E"
+  - "F"
+
+# features and response
+categorical_features:
+  home_guest: ["Home", "Guest"]
+  venue_type: ["Hard", "Soft"]
+  weather: ["Rainy", "Cloudy", "Sunny", "Windy"]
+
+numerical_features:
+  num_features_1: [0.0, 1.0]
+  num_features_2: [0.0, 1.0]
+  num_features_3: [0.0, 1.0]
+
+response: "score_value"
+
+ouput_fp: "data/sample_data.pkl"
