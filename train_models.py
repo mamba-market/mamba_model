@@ -3,62 +3,76 @@ import os
 import pandas
 import yaml
 import logging
+import hydra
+from omegaconf import DictConfig
 import torch
 from torch.utils.data import DataLoader
-from data.dataset import CriketScoreDataSet
-from models.utils import get_dataset, get_model, train, test, EarlyStopper
+from data.dataset import CriketScoreDataSetWithCatAndNum
+from models.attention_fm import FactorizationMachine, EarlyStopping
+from models.utils import train, evaluate, plot_losses
 
 logging.basicConfig(level=logging.INFO)
 
 
-def main(model_name,
-         epoch,
-         learning_rate,
-         batch_size,
-         weight_decay,
-         save_dir):
+@hydra.main(version_base=None, config_path="configs", config_name="config")
+def main(cfg: DictConfig):
+    epochs = cfg.epoch
+    learning_rate = cfg.learning_rate
+    batch_size = cfg.batch_size
+    weight_decay = cfg.weight_decay
+    save_dir = cfg.save_dir
+    input_fp = cfg.input_fp
+
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-    dataset = CriketScoreDataSet('data/sample_data.pkl')
-    train_length = int(len(dataset) * 0.8)
-    valid_length = int(len(dataset) * 0.1)
-    test_length = len(dataset) - train_length - valid_length
-    train_dataset, valid_dataset, test_dataset = torch.utils.data.random_split(
-        dataset, (train_length, valid_length, test_length))
-    train_data_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=8)
-    valid_data_loader = DataLoader(valid_dataset, batch_size=batch_size, num_workers=8)
-    test_data_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=8)
-    model = get_model(model_name, dataset).to(device)
+    # grabbing raw data
+    data = pandas.read_pickle(input_fp)
+    for col in cfg.categorical_features:
+        data[col] = data[col].astype('category').cat.codes
+    dims_categorical_vars = [len(data[col].unique()) for col in cfg.categorical_features]
+    dim_numerical_vars = len(cfg.numerical_features)
+    # splitting data
+    train_df = data.sample(frac=0.8, random_state=42)
+    train_df.reset_index(inplace=True, drop=True)
+    test_df = data.drop(train_df.index)
+    test_df.reset_index(inplace=True, drop=True)
+    logging.info("Sizes of training and testing datasets")
+    logging.info(f"Training: {len(train_df)}")
+    logging.info(f"Testing: {len(test_df)}")
+    # composing dataset
+    train_dataset = CriketScoreDataSetWithCatAndNum(train_df, cfg.categorical_features, cfg.numerical_features,
+                                                    cfg.response)
+    test_dataset = CriketScoreDataSetWithCatAndNum(test_df, cfg.categorical_features, cfg.numerical_features,
+                                                   cfg.response)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size)
+    logging.info(f"Data loader assembled.")
+    # model initialization
+    model = FactorizationMachine(cat_dims=dims_categorical_vars, num_dim=dim_numerical_vars,
+                                 k=10, attention_dim=50).to(device)
     criterion = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    early_stopper = EarlyStopper(num_trials=2, save_path=save_dir)
-    for epoch_i in range(epoch):
-        train(model, optimizer, train_data_loader, criterion, device)
-        auc = test(model, valid_data_loader, device)
-        print('epoch:', epoch_i, 'validation: auc:', auc)
-        if not early_stopper.is_continuable(model, auc):
-            print(f'validation: best auc: {early_stopper.best_accuracy}')
+    early_stopper = EarlyStopping(patience=3)
+    logging.info("Model successfully initialized.")
+
+    train_losses, test_losses = [], []
+    for epoch in range(epochs):
+        train_loss = train(model, train_loader, optimizer, criterion, device)
+        test_loss = evaluate(model, test_loader, criterion, device)
+        train_losses.append(train_loss)
+        test_losses.append(test_loss)
+        logging.info(f'Epoch {epoch + 1}/{epochs}, Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}')
+        early_stopper(test_loss, model)
+        if early_stopper.early_stop:
+            logging.warning("Early stopping")
             break
-    auc = test(model, test_data_loader, device)
-    print(f'test auc: {auc}')
+
+    torch.save(model.state_dict(), os.path.join(cfg.model_fp, cfg.best_model_name))
+    plot_losses(train_losses, test_losses, save_path=cfg.loss_plot_fp)
 
 
 if __name__ == '__main__':
-    import argparse
+    main()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', default='fm')
-    parser.add_argument('--epoch', type=int, default=100)
-    parser.add_argument('--learning_rate', type=float, default=0.001)
-    parser.add_argument('--batch_size', type=int, default=2048)
-    parser.add_argument('--weight_decay', type=float, default=1e-6)
-    parser.add_argument('--save_dir', default='chkpt')
-    args = parser.parse_args()
-    main(args.model_name,
-         args.epoch,
-         args.learning_rate,
-         args.batch_size,
-         args.weight_decay,
-         args.save_dir)

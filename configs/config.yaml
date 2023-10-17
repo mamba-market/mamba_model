@@ -1,0 +1,27 @@
+# Configs to train model
+# features
+categorical_features:
+  - "player"
+  - "score_id"
+  - "home_guest"
+  - "venue_type"
+  - "weather"
+
+numerical_features:
+  - "num_features_1"
+  - "num_features_2"
+  - "num_features_3"
+
+# response
+response: "score_val"
+
+input_fp: "data/sample_data.pkl"
+model_fp: "chkpt"
+best_model_name: 'factorization_machine_model.pth'
+
+epoch: 100
+learning_rate: 1e-3
+batch_size: 16
+weight_decay: 1e-6
+save_dir: "chkpt"
+loss_plot_fp: "loss_plot.png"

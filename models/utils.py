@@ -1,9 +1,9 @@
 """modeling utils"""
 import os
-
-import tqdm
+import pandas
+import seaborn as sns
+import matplotlib.pyplot as plt
 import torch
-from sklearn.metrics import mean_absolute_error
 from torchfm.dataset.avazu import AvazuDataset
 from torchfm.dataset.criteo import CriteoDataset
 from torchfm.dataset.movielens import MovieLens1MDataset, MovieLens20MDataset
@@ -56,30 +56,46 @@ class EarlyStopper(object):
             return False
 
 
-def train(model, optimizer, data_loader, criterion, device, log_interval=100):
+
+def train(model, data_loader, optimizer, criterion, device):
     model.train()
-    total_loss = 0
-    tk0 = tqdm.tqdm(data_loader, smoothing=0, mininterval=1.0)
-    for i, (fields, target) in enumerate(tk0):
-        fields, target = fields.to(device), target.to(device)
-        y = model(fields)
-        loss = criterion(y, target.float())
-        model.zero_grad()
+    total_loss = 0.0
+    for cat_data, num_data, targets in data_loader:
+        cat_data, num_data, targets = cat_data.to(device), num_data.to(device), targets.to(device)
+        optimizer.zero_grad()
+        outputs = model(cat_data, num_data).squeeze()
+        import i
+        loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
-        if (i + 1) % log_interval == 0:
-            tk0.set_postfix(loss=total_loss / log_interval)
-            total_loss = 0
+    return total_loss / len(data_loader)
 
 
-def test(model, data_loader, device):
+def evaluate(model, data_loader, criterion, device):
     model.eval()
-    targets, predicts = list(), list()
+    total_loss = 0.0
     with torch.no_grad():
-        for fields, target in tqdm.tqdm(data_loader, smoothing=0, mininterval=1.0):
-            fields, target = fields.to(device), target.to(device)
-            y = model(fields)
-            targets.extend(target.tolist())
-            predicts.extend(y.tolist())
-    return mean_absolute_error(targets, predicts)
+        for cat_data, num_data, targets in data_loader:
+            cat_data, num_data, targets = cat_data.to(device), num_data.to(device), targets.to(device)
+            outputs = model(cat_data, num_data).squeeze()
+            loss = criterion(outputs, targets)
+            total_loss += loss.item()
+    return total_loss / len(data_loader)
+
+
+def plot_losses(train_losses, test_losses, save_path='loss_plot.png'):
+    # Setting Seaborn style
+    sns.set_style("whitegrid")
+    # Create a pandas DataFrame for the data
+    df_losses = pandas.DataFrame({
+        'Epoch': list(range(1, len(train_losses) + 1)) * 2,
+        'Loss': train_losses + test_losses,
+        'Type': ['Train'] * len(train_losses) + ['Test'] * len(test_losses)
+    })
+    plt.figure(figsize=(10, 6))
+    sns.lineplot(data=df_losses, x='Epoch', y='Loss', hue='Type', marker='o')
+    plt.title('Training and Testing Losses')
+    plt.savefig(save_path)
+    plt.show()
+

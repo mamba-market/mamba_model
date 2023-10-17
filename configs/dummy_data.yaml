@@ -11,6 +11,7 @@ score_ids:
 
 # features and response
 categorical_features:
+  club: ["AA", "BB", "CC"]
   home_guest: ["Home", "Guest"]
   venue_type: ["Hard", "Soft"]
   weather: ["Rainy", "Cloudy", "Sunny", "Windy"]

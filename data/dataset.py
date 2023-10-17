@@ -1,10 +1,11 @@
 """custom criket score dataset"""
 import numpy as np
 import pandas
-import torch.utils.data
+import torch
+from torch.utils.data import DataLoader, Dataset
 
 
-class CriketScoreDataSet(torch.utils.data.Dataset):
+class CriketScoreDataSet(Dataset):
     """
     Criket Dataset
 
@@ -25,3 +26,19 @@ class CriketScoreDataSet(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         return self.items[index], self.targets[index]
+
+
+class CriketScoreDataSetWithCatAndNum(Dataset):
+    def __init__(self, dataframe, cat_cols, num_cols, target_col):
+        self.dataframe = dataframe
+        self.cat_cols = cat_cols
+        self.num_cols = num_cols
+        self.target = dataframe[target_col].values
+
+    def __len__(self):
+        return len(self.dataframe)
+
+    def __getitem__(self, idx):
+        return (torch.tensor(self.dataframe.iloc[idx][self.cat_cols].values, dtype=torch.long),
+                torch.tensor(self.dataframe.iloc[idx][self.num_cols].values, dtype=torch.float32),
+                torch.tensor(self.target[idx], dtype=torch.float32))
