@@ -83,6 +83,17 @@ def evaluate(model, data_loader, criterion, device):
     return total_loss / len(data_loader)
 
 
+def inference(model, data_loader, device):
+    model.eval()
+    outputs = []
+    with torch.no_grad():
+        for cat_data, num_data, targets in data_loader:
+            cat_data, num_data, targets = cat_data.to(device), num_data.to(device), targets.to(device)
+            outputs.extend(model(cat_data, num_data).squeeze())
+    outputs = [float(output) for output in outputs]
+    return outputs
+
+
 def plot_losses(train_losses, test_losses, save_path='loss_plot.png'):
     # Setting Seaborn style
     sns.set_style("whitegrid")

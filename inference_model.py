@@ -7,24 +7,22 @@ from omegaconf import DictConfig
 import torch
 from torch.utils.data import DataLoader
 from data.dataset import CriketScoreDataSetWithCatAndNum
-from models.attention_fm import FactorizationMachine, EarlyStopping
-from models.utils import train, evaluate, plot_losses
+from models.attention_fm import FactorizationMachine
+from models.utils import inference
 
 logging.basicConfig(level=logging.INFO)
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: DictConfig):
-    epochs = cfg.epoch
-    learning_rate = cfg.learning_rate
     batch_size = cfg.batch_size
-    weight_decay = cfg.weight_decay
     input_fp = cfg.input_fp
 
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
+
     # grabbing raw data
     data = pandas.read_pickle(input_fp)
     for col in cfg.categorical_features:
@@ -40,38 +38,22 @@ def main(cfg: DictConfig):
     logging.info("Sizes of training and testing datasets")
     logging.info(f"Training: {len(train_df)}")
     logging.info(f"Testing: {len(test_df)}")
-
     # composing dataset
-    train_dataset = CriketScoreDataSetWithCatAndNum(train_df, cfg.categorical_features, cfg.numerical_features,
-                                                    cfg.response)
+
     test_dataset = CriketScoreDataSetWithCatAndNum(test_df, cfg.categorical_features, cfg.numerical_features,
                                                    cfg.response)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
     logging.info(f"Data loader assembled.")
-    # model initialization
-    model = FactorizationMachine(cat_dims=dims_categorical_vars, num_dim=dim_numerical_vars,
-                                 k=10, attention_dim=50).to(device)
-    criterion = torch.nn.MSELoss()
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    early_stopper = EarlyStopping(patience=3)
-    logging.info("Model successfully initialized.")
 
-    train_losses, test_losses = [], []
-    for epoch in range(epochs):
-        train_loss = train(model, train_loader, optimizer, criterion, device)
-        test_loss = evaluate(model, test_loader, criterion, device)
-        train_losses.append(train_loss)
-        test_losses.append(test_loss)
-        logging.info(f'Epoch {epoch + 1}/{epochs}, Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}')
-        early_stopper(test_loss, model)
-        if early_stopper.early_stop:
-            logging.warning("Early stopping")
-            break
+    model = FactorizationMachine(dims_categorical_vars, dim_numerical_vars, k=10, attention_dim=50)
+    model.load_state_dict(torch.load(os.path.join(cfg.model_fp, cfg.best_model_name)))
+    model.eval()
 
-    torch.save(model.state_dict(), os.path.join(cfg.model_fp, cfg.best_model_name))
-    plot_losses(train_losses, test_losses, save_path=cfg.loss_plot_fp)
+    with torch.no_grad():  # Disable gradient computation
+        predictions = inference(model, test_loader, device)
 
+    logging.info(f"Below are the inference results given your input data, shape {len(predictions)}:")
+    logging.info(f"Top 100, remaining truncated, \n{predictions[:100]}")
 
 if __name__ == '__main__':
     main()
