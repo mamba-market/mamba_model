@@ -39,8 +39,8 @@ def main(cfg: DictConfig):
 
     # splitting data
     train_df = data.sample(frac=0.8, random_state=42)
-    train_df.reset_index(inplace=True, drop=True)
     test_df = data.drop(train_df.index)
+    train_df.reset_index(inplace=True, drop=True)
     test_df.reset_index(inplace=True, drop=True)
     logging.info("Sizes of training and testing datasets")
     logging.info(f"Training: {len(train_df)}")
