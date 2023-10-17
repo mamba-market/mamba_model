@@ -7,6 +7,7 @@ from omegaconf import DictConfig
 import torch
 from torch.utils.data import DataLoader
 from sklearn.preprocessing import LabelEncoder
+from sklearn.utils import shuffle
 from data.dataset import CriketScoreDataSetWithCatAndNum
 from models.attention_fm import FactorizationMachine
 from models.utils import inference
@@ -48,6 +49,7 @@ def main(cfg: DictConfig):
     dim_numerical_vars = len(cfg.numerical_features)
 
     # splitting data
+    data = shuffle(data)
     train_df = data.sample(frac=0.8, random_state=42)
     test_df = data.drop(train_df.index)
     train_df.reset_index(inplace=True, drop=True)

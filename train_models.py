@@ -7,6 +7,7 @@ from omegaconf import DictConfig
 import torch
 from torch.utils.data import DataLoader
 from sklearn.preprocessing import LabelEncoder
+from sklearn.utils import shuffle
 from data.dataset import CriketScoreDataSetWithCatAndNum
 from models.attention_fm import FactorizationMachine, EarlyStopping
 from models.utils import train, evaluate, plot_losses
@@ -31,6 +32,7 @@ def main(cfg: DictConfig):
         data = pandas.read_csv(input_fp)
     else:
         data = pandas.read_pickle(input_fp)
+    data = shuffle(data)
     for col in cfg.categorical_features:
         le = LabelEncoder()
         data[col] = le.fit_transform(data[col])
