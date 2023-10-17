@@ -1,21 +1,26 @@
 # Configs to train model
 # features
 categorical_features:
-  - "player"
-  - "score_id"
-  - "home_guest"
-  - "venue_type"
-  - "weather"
+  - "player_id"
+  - "player_team_id"
+  - "home_team_id"
+  - "ground_id"
+  - "international_class_id"
+  - "floodlit"
+  - "neutral_match"
+  - "international_valid"
+  - "followon"
+  - "rain_rule"
+  - "target_id"
 
 numerical_features:
-  - "num_features_1"
-  - "num_features_2"
-  - "num_features_3"
+  - "days_extended"
+  - "actual_days"
 
 # response
-response: "score_val"
+response: "target_value"
 
-input_fp: "data/sample_data.pkl"
+input_fp: "/Users/juichanglu/work/startup/mamba_model/data/cricket_traning_data.csv"
 model_fp: "chkpt"
 best_model_name: 'factorization_machine_model.pth'
 
