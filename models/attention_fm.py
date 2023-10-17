@@ -66,8 +66,10 @@ class FactorizationMachine(nn.Module):
 
         # Combine everything
         y_pred = linear_term + inter_term + torch.sum(weighted_embeddings, 1)
+        y_pred = y_pred.mean(axis=1)
 
-        return self.dropout(y_pred)
+        return y_pred
+
 
 
 class EarlyStopping:

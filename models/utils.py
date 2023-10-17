@@ -64,7 +64,6 @@ def train(model, data_loader, optimizer, criterion, device):
         cat_data, num_data, targets = cat_data.to(device), num_data.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = model(cat_data, num_data).squeeze()
-        import i
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -97,5 +96,4 @@ def plot_losses(train_losses, test_losses, save_path='loss_plot.png'):
     sns.lineplot(data=df_losses, x='Epoch', y='Loss', hue='Type', marker='o')
     plt.title('Training and Testing Losses')
     plt.savefig(save_path)
-    plt.show()
 
