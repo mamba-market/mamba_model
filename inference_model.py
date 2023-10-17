@@ -65,6 +65,7 @@ def main(cfg: DictConfig):
     logging.info(f"Data loader assembled.")
 
     model = FactorizationMachine(dims_categorical_vars, dim_numerical_vars, k=10, attention_dim=50)
+    model.to(device)
     model.load_state_dict(torch.load(os.path.join(cfg.model_fp, cfg.best_model_name)))
     model.eval()
 

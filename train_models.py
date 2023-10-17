@@ -25,8 +25,10 @@ def main(cfg: DictConfig):
 
     if torch.cuda.is_available():
         device = torch.device('cuda')
+        logging.info("Using GPU.")
     else:
         device = torch.device('cpu')
+        logging.info("Using CPU due to GPU unavailable.")
     # grabbing raw data
     if input_fp.endswith('.csv'):
         data = pandas.read_csv(input_fp)

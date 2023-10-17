@@ -26,8 +26,8 @@ model_fp: "chkpt"
 best_model_name: 'factorization_machine_model.pth'
 
 epoch: 100
-learning_rate: 1e-3
-batch_size: 32
+learning_rate: 1e-2
+batch_size: 128
 weight_decay: 1e-6
 save_dir: "chkpt"
 loss_plot_fp: "loss_plot.png"
