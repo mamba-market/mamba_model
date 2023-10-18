@@ -25,9 +25,18 @@ inference_input_fp: "data/cricket_traning_data.csv"
 model_fp: "chkpt"
 best_model_name: 'factorization_machine_model.pth'
 
+
+training_sample_size: 10000
+minority_sample_limit: 10
+minority_sampling_categories: ["player_id", "target_id", "target_value"]
+stratefied_sampling_categories: ["target_id"]
+allowed_initial_loss_diff: 0.1
 epoch: 100
-learning_rate: 1e-2
-batch_size: 128
-weight_decay: 1e-6
+learning_rate: 5e-5
+batch_size: 16
+weight_decay: 1e-8
+embedding_dim: 20
+attention_dim: 20
+
 save_dir: "chkpt"
 loss_plot_fp: "loss_plot.png"
