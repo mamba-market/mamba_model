@@ -30,7 +30,7 @@ loss_plot_fp: "loss_curves"
 inference_input_fp: "data/img20231006_16171399.csv"
 
 # choose up to 20k when target value range [10, 200], otherwise, can be up to 100k
-training_sample_size: 40000
+training_sample_size: 30000
 # Consider only two scenarios: target value [0, 10] or [10, 200]
 target_lower_limit: 0
 target_upper_limit: 10
