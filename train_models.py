@@ -34,9 +34,12 @@ def main(cfg: DictConfig):
         data = pandas.read_csv(input_fp)
     else:
         data = pandas.read_pickle(input_fp)
+    # eliminating any NAs rows
+    logging.info(f"Eliminating {data.isna().any(axis=1).sum()} NA rows...")
+    data = data.loc[~data.isna().any(axis=1), :].copy()
     # stratified sampling weights
     logging.info(f"Data size before filtering {len(data)}")
-    data = data[data[cfg.response] > cfg.target_lower_limit].copy()
+    data = data[data[cfg.response] >= cfg.target_lower_limit].copy()
     data = data[data[cfg.response] < cfg.target_upper_limit].copy()
     logging.info(f"Data size after settting [{cfg.target_lower_limit}, {cfg.target_upper_limit}] "
                  f"as upper and lower limits: {len(data)}")
@@ -67,15 +70,16 @@ def main(cfg: DictConfig):
                                  k=cfg.embedding_dim, attention_dim=cfg.attention_dim).to(device)
     criterion = torch.nn.L1Loss()
     optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    early_stopper = EarlyStopping(patience=3)
+    early_stopper = EarlyStopping(patience=3, checkpoint_path=cfg.model_fp,
+                                  checkpoint_filename=f"{cfg.best_model_name}_target_val_"
+                                                      f"{cfg.target_lower_limit}_{cfg.target_upper_limit}.pth")
     logging.info("Model successfully initialized.")
 
     train_losses, test_losses = [], []
     # splitting data, still following the stratified rule.
-
-    train_loss, test_loss = -8, -10
+    train_loss, test_loss = -5, -10
     test_loader, train_loader = forming_train_and_test_data(batch_size, cfg, data)
-    while abs(train_loss - test_loss) > cfg.allowed_initial_loss_diff or train_loss > test_loss:
+    while abs(train_loss - test_loss) > cfg.allowed_initial_loss_diff:
         logging.info(f"Regenerating test and train data to offset initial loss diff {abs(train_loss - test_loss)}...")
         test_loader, train_loader = forming_train_and_test_data(batch_size, cfg, data)
         # pretraining loss
@@ -95,8 +99,8 @@ def main(cfg: DictConfig):
             logging.warning("Early stopping")
             break
 
-    torch.save(model.state_dict(), os.path.join(cfg.model_fp, cfg.best_model_name))
-    plot_losses(train_losses, test_losses, save_path=cfg.loss_plot_fp)
+    plot_losses(train_losses, test_losses, save_path=
+    f"{cfg.loss_plot_fp}_target_val_{cfg.target_lower_limit}_{cfg.target_upper_limit}")
 
 
 def forming_train_and_test_data(batch_size, cfg, data):

@@ -73,7 +73,7 @@ class FactorizationMachine(nn.Module):
 
 
 class EarlyStopping:
-    def __init__(self, patience=5, delta=0, checkpoint_path='chkpt'):
+    def __init__(self, patience=5, delta=0, checkpoint_path='chkpt', checkpoint_filename='model.pth'):
         """
         :param patience: How many epochs to wait for improvement before stopping.
         :param delta: Minimum change in the monitored quantity to qualify as an improvement.
@@ -85,6 +85,7 @@ class EarlyStopping:
         self.early_stop = False
         self.delta = delta
         self.checkpoint_path = checkpoint_path
+        self.checkpoint_filename = checkpoint_filename
 
     def __call__(self, val_loss, model):
         score = -val_loss
@@ -103,7 +104,7 @@ class EarlyStopping:
 
     def save_checkpoint(self, val_loss, model):
         os.makedirs(self.checkpoint_path, exist_ok=True)
-        torch.save(model.state_dict(), os.path.join(self.checkpoint_path, 'model.pth'))
-        print(f'Validation loss decreased ({self.best_score:.6f} --> {val_loss:.6f}).  Saving model ...')
+        torch.save(model.state_dict(), os.path.join(self.checkpoint_path, self.checkpoint_filename))
+        print(f'Validation loss decreased: best score {self.best_score:.6f}, loss {val_loss:.6f}.  Saving model ...')
 
 

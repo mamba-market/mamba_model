@@ -94,7 +94,8 @@ def inference(model, data_loader, device):
     return outputs
 
 
-def plot_losses(train_losses, test_losses, save_path='loss_plot.png'):
+def plot_losses(train_losses, test_losses, save_path='loss_curve'):
+    os.makedirs("results", exist_ok=True)
     # Setting Seaborn style
     sns.set_style("whitegrid")
     # Create a pandas DataFrame for the data
@@ -106,5 +107,5 @@ def plot_losses(train_losses, test_losses, save_path='loss_plot.png'):
     plt.figure(figsize=(10, 6))
     sns.lineplot(data=df_losses, x='Epoch', y='Loss', hue='Type', marker='o')
     plt.title('Training and Testing Losses')
-    plt.savefig(save_path)
+    plt.savefig(os.path.join("results", f"{save_path}.png"))
 
