@@ -1,6 +1,8 @@
-sklearn
+scikit-learn
 torch
 hydra-core
 omegaconf
 lmdb
 seaborn
+ipdb
+tqdm

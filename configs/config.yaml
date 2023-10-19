@@ -27,10 +27,12 @@ best_model_name: 'factorization_machine_model.pth'
 
 
 training_sample_size: 10000
+target_lower_limit: 10
+target_upper_limit: 200
 minority_sample_limit: 10
 minority_sampling_categories: ["player_id", "target_id", "target_value"]
 stratefied_sampling_categories: ["target_id"]
-allowed_initial_loss_diff: 0.1
+allowed_initial_loss_diff: 0.5
 epoch: 100
 learning_rate: 5e-5
 batch_size: 16

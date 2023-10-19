@@ -36,6 +36,10 @@ def main(cfg: DictConfig):
         data = pandas.read_pickle(input_fp)
     # stratified sampling weights
     logging.info(f"Data size before filtering {len(data)}")
+    data = data[data[cfg.response] > cfg.target_lower_limit].copy()
+    data = data[data[cfg.response] < cfg.target_upper_limit].copy()
+    logging.info(f"Data size after settting [{cfg.target_lower_limit}, {cfg.target_upper_limit}] "
+                 f"as upper and lower limits: {len(data)}")
     for minority_sampling_category in cfg.minority_sampling_categories:
         data['freq'] = data.groupby(minority_sampling_category)[cfg.response].transform('count')
         # eliminating extremely under represented data
@@ -69,9 +73,9 @@ def main(cfg: DictConfig):
     train_losses, test_losses = [], []
     # splitting data, still following the stratified rule.
 
-    train_loss, test_loss = -10, 10
+    train_loss, test_loss = -8, -10
     test_loader, train_loader = forming_train_and_test_data(batch_size, cfg, data)
-    while abs(train_loss - test_loss) > cfg.allowed_initial_loss_diff:
+    while abs(train_loss - test_loss) > cfg.allowed_initial_loss_diff or train_loss > test_loss:
         logging.info(f"Regenerating test and train data to offset initial loss diff {abs(train_loss - test_loss)}...")
         test_loader, train_loader = forming_train_and_test_data(batch_size, cfg, data)
         # pretraining loss
