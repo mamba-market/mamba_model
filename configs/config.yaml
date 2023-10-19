@@ -40,7 +40,7 @@ minority_sampling_categories: ["player_id", "target_id", "target_value"]
 stratefied_sampling_categories: ["target_id"]
 
 # use a value between [1.5, 3] when data size greater than 20k, otherwise can be [0.2, 0.5]
-allowed_initial_loss_diff: 3
+allowed_initial_loss_diff: 1.5
 
 epoch: 100
 learning_rate: 1e-5

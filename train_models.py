@@ -77,10 +77,9 @@ def main(cfg: DictConfig):
 
     train_losses, test_losses = [], []
     # splitting data, still following the stratified rule.
-
-    train_loss, test_loss = -8, -10
+    train_loss, test_loss = -5, -10
     test_loader, train_loader = forming_train_and_test_data(batch_size, cfg, data)
-    while abs(train_loss - test_loss) > cfg.allowed_initial_loss_diff or train_loss > test_loss:
+    while abs(train_loss - test_loss) > cfg.allowed_initial_loss_diff:
         logging.info(f"Regenerating test and train data to offset initial loss diff {abs(train_loss - test_loss)}...")
         test_loader, train_loader = forming_train_and_test_data(batch_size, cfg, data)
         # pretraining loss
