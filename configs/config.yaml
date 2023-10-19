@@ -34,7 +34,7 @@ minority_sampling_categories: ["player_id", "target_id", "target_value"]
 stratefied_sampling_categories: ["target_id"]
 allowed_initial_loss_diff: 0.5
 epoch: 100
-learning_rate: 5e-5
+learning_rate: 5e-4
 batch_size: 16
 weight_decay: 1e-8
 embedding_dim: 20
