@@ -6,3 +6,4 @@ lmdb
 seaborn
 ipdb
 tqdm
+torchfm

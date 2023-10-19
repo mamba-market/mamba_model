@@ -32,6 +32,25 @@ def main(cfg: DictConfig):
     else:
         training_data = pandas.read_pickle(training_input_fp)
 
+    # eliminating any NAs rows
+    logging.info(f"Eliminating {training_data.isna().any(axis=1).sum()} NA rows...")
+    training_data = training_data.loc[~training_data.isna().any(axis=1), :].copy()
+    # stratified sampling weights
+    logging.info(f"Data size before filtering {len(training_data)}")
+    training_data = training_data[training_data[cfg.response] >= cfg.target_lower_limit].copy()
+    training_data = training_data[training_data[cfg.response] < cfg.target_upper_limit].copy()
+    logging.info(f"Data size after settting [{cfg.target_lower_limit}, {cfg.target_upper_limit}] "
+                 f"as upper and lower limits: {len(training_data)}")
+    for minority_sampling_category in cfg.minority_sampling_categories:
+        training_data['freq'] = training_data.groupby(minority_sampling_category)[cfg.response].transform('count')
+        # eliminating extremely under represented data
+        training_data = training_data[training_data['freq'] >= cfg.minority_sample_limit].copy()
+    logging.info(f"Data size after removing under represented rows {len(training_data)}.")
+    if cfg.training_sample_size is not None:
+        training_data = training_data.sample(n=cfg.training_sample_size, replace=False,
+                           weights=training_data.groupby(list(cfg.stratefied_sampling_categories))[cfg.response].transform(
+                               'count'))
+
     if inference_input_fp.endswith('.csv'):
         data = pandas.read_csv(inference_input_fp)
     else:
@@ -66,7 +85,8 @@ def main(cfg: DictConfig):
 
     model = FactorizationMachine(dims_categorical_vars, dim_numerical_vars, k=10, attention_dim=50)
     model.to(device)
-    model.load_state_dict(torch.load(os.path.join(cfg.model_fp, cfg.best_model_name)))
+    model.load_state_dict(torch.load(os.path.join(cfg.model_fp, f"{cfg.best_model_name}_target_val_"
+                                                      f"{cfg.target_lower_limit}_{cfg.target_upper_limit}.pth")))
     model.eval()
 
     with torch.no_grad():  # Disable gradient computation
