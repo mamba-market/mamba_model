@@ -26,6 +26,9 @@ def main(cfg: DictConfig):
     if torch.cuda.is_available():
         device = torch.device('cuda')
         logging.info("Using GPU.")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+        logging.info("Using MPS")
     else:
         device = torch.device('cpu')
         logging.info("Using CPU due to GPU unavailable.")
@@ -85,6 +88,7 @@ def main(cfg: DictConfig):
         # pretraining loss
         train_loss, test_loss = evaluate(model, train_loader, criterion, device), \
                                 evaluate(model, test_loader, criterion, device)
+        logging.info(f"current loss difference is {abs(train_loss - test_loss)}, train_loss is {train_loss}")
     train_losses.append(train_loss)
     test_losses.append(test_loss)
     logging.info(f"Pretraining losses for train and test dataset are {train_loss}, {test_loss}, respectively.")
@@ -104,6 +108,7 @@ def main(cfg: DictConfig):
 
 
 def forming_train_and_test_data(batch_size, cfg, data):
+    del data['start_time']
     train_df = data.sample(frac=0.8,
                            weights=data.groupby(list(cfg.stratefied_sampling_categories))[cfg.response].transform(
                                'count'))
