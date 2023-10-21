@@ -72,14 +72,13 @@ def main(cfg: DictConfig):
     model.eval()
 
     with torch.no_grad():  # Disable gradient computation
-        predictions = inference(model, test_loader, device)
+        predictions = list(map(lambda x: abs(int(x)), inference(model, test_loader, device)))
 
     logging.info(f"Below are the inference results given your input data, shape {len(predictions)}:")
     logging.info(f"Top 100, remaining truncated, \n{predictions[:100]}")
-    mae, mape = MeanAbsoluteError(), MeanAbsolutePercentageError()
-    mae, mape = mae(torch.Tensor(predictions), torch.Tensor(data[cfg.response])), \
-                mape(torch.Tensor(predictions), torch.Tensor(data[cfg.response]))
-    logging.info(f"Mean inference score: \nMAE: {mae}; MAPE: {mape}")
+    mae = MeanAbsoluteError()
+    mae = mae(torch.Tensor(predictions), torch.Tensor(data[cfg.response]))
+    logging.info(f"Mean inference score: \nMAE: {mae}")
 
 
 if __name__ == '__main__':
