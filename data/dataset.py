@@ -39,6 +39,6 @@ class CriketScoreDataSetWithCatAndNum(Dataset):
         return len(self.dataframe)
 
     def __getitem__(self, idx):
-        return (torch.tensor(self.dataframe.iloc[idx][self.cat_cols].values, dtype=torch.long),
-                torch.tensor(self.dataframe.iloc[idx][self.num_cols].values, dtype=torch.float32),
+        return (torch.tensor(list(map(float, self.dataframe.iloc[idx][self.cat_cols].values)), dtype=torch.long),
+                torch.tensor(list(map(float, self.dataframe.iloc[idx][self.num_cols].values)), dtype=torch.float32),
                 torch.tensor(self.target[idx], dtype=torch.float32))

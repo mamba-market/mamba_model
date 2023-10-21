@@ -1,5 +1,6 @@
 """modeling utils"""
 import os
+import numpy
 import pandas
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -8,6 +9,7 @@ from torchfm.dataset.avazu import AvazuDataset
 from torchfm.dataset.criteo import CriteoDataset
 from torchfm.dataset.movielens import MovieLens1MDataset, MovieLens20MDataset
 from torchfm.model.fm import FactorizationMachineModel
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 
 def get_dataset(name, path):
@@ -94,7 +96,7 @@ def inference(model, data_loader, device):
     return outputs
 
 
-def plot_losses(train_losses, test_losses, save_path='loss_curve'):
+def plot_losses(train_losses, test_losses, data_type = 'ODI', save_path='loss_curve'):
     os.makedirs("results", exist_ok=True)
     # Setting Seaborn style
     sns.set_style("whitegrid")
@@ -106,6 +108,67 @@ def plot_losses(train_losses, test_losses, save_path='loss_curve'):
     })
     plt.figure(figsize=(10, 6))
     sns.lineplot(data=df_losses, x='Epoch', y='Loss', hue='Type', marker='o')
-    plt.title('Training and Testing Losses')
+    plt.title(f'Training and Testing MAE Losses {data_type}')
     plt.savefig(os.path.join("results", f"{save_path}.png"))
+
+
+class LabelEncoderExt(object):
+    def __init__(self):
+        """
+        It differs from LabelEncoder by handling new classes and providing a value for it [Unknown]
+        Unknown will be added in fit and transform will take care of new item. It gives unknown class id
+        """
+        self.label_encoder = LabelEncoder()
+
+    def fit(self, data_list):
+        """
+        This will fit the encoder for all the unique values and introduce unknown value
+        :param data_list: A list of string
+        :return: self
+        """
+        self.label_encoder = self.label_encoder.fit(list(data_list) + [-20231029])
+        self.classes_ = self.label_encoder.classes_
+        return self
+
+    def transform(self, data_list):
+        """
+        This will transform the data_list to id list where the new values get assigned to Unknown class
+        :param data_list:
+        :return:
+        """
+        new_data_list = []
+        for element in data_list:
+            if element in self.classes_:
+                new_data_list.append(element)
+            else:
+                new_data_list.append(-20231029)
+        return self.label_encoder.transform(new_data_list).tolist()
+
+
+class Standardizer(object):
+    def __init__(self):
+        """
+        A unified version of standardizer built on top of the sklearn StandardScaler() module
+        """
+        self.standardizer = StandardScaler()
+
+    def fit(self, data_list):
+        """
+        This will fit the standardizer for the given list of data
+        :param data_list: A list of numeric values
+        :return: self
+        """
+        self.standardizer.fit(numpy.array(data_list).reshape(-1, 1))
+        self.mean = self.standardizer.mean_[0]
+        self.variance = self.standardizer.var_[0]
+        return self
+
+    def transform(self, data_list):
+        """
+        This will transform the data_list based on the mean and variance of the standardizer
+        :param data_list:
+        :return:
+        """
+        return self.standardizer.transform(numpy.array(data_list).reshape(-1, 1)).squeeze().tolist()
+
 

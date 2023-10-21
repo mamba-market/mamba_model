@@ -6,11 +6,10 @@ import hydra
 from omegaconf import DictConfig
 import torch
 from torch.utils.data import DataLoader
-from sklearn.preprocessing import LabelEncoder
 from sklearn.utils import shuffle
 from data.dataset import CriketScoreDataSetWithCatAndNum
 from models.attention_fm import FactorizationMachine, EarlyStopping
-from models.utils import train, evaluate, plot_losses
+from models.utils import train, evaluate, plot_losses, LabelEncoderExt, Standardizer
 
 logging.basicConfig(level=logging.INFO)
 
@@ -43,7 +42,7 @@ def main(cfg: DictConfig):
     # stratified sampling weights
     logging.info(f"Data size before filtering {len(data)}")
     data = data[data[cfg.response] >= cfg.target_lower_limit].copy()
-    data = data[data[cfg.response] < cfg.target_upper_limit].copy()
+    data = data[data[cfg.response] <= cfg.target_upper_limit].copy()
     logging.info(f"Data size after settting [{cfg.target_lower_limit}, {cfg.target_upper_limit}] "
                  f"as upper and lower limits: {len(data)}")
     for minority_sampling_category in cfg.minority_sampling_categories:
@@ -58,10 +57,20 @@ def main(cfg: DictConfig):
     logging.info(f"{data.describe()}")
     data = shuffle(data)
     data.reset_index(inplace=True, drop=True)
+    data.to_csv(cfg.filtered_training_data, index=False)
+
+    # Data scaling
     for col in cfg.categorical_features:
-        le = LabelEncoder()
-        data[col] = le.fit_transform(data[col])
-        logging.info(f"Converting feature {col} into {len(le.classes_)} levels.")
+        # data[col] = data[col].astype('str')
+        le = LabelEncoderExt()
+        le.fit(data[col])
+        data[col] = le.transform(data[col])
+        logging.info(f"Converting feature {col} into {len(le.classes_)} levels, with {data[col].unique().shape[0]} classes.")
+    # for col in cfg.numerical_features:
+    #     standardizer = Standardizer()
+    #     standardizer.fit(data[col])
+    #     data[col] = standardizer.transform(data[col])
+
     dims_categorical_vars = [data[col].max() + 1 for col in cfg.categorical_features]
     dim_numerical_vars = len(cfg.numerical_features)
     logging.info(f"Total dims of categorical vars: \n{dims_categorical_vars}")
@@ -80,18 +89,19 @@ def main(cfg: DictConfig):
 
     train_losses, test_losses = [], []
     # splitting data, still following the stratified rule.
-    train_loss, test_loss = -5, -10
+    loss_discrepency = float('inf')
     test_loader, train_loader = forming_train_and_test_data(batch_size, cfg, data)
-    while abs(train_loss - test_loss) > cfg.allowed_initial_loss_diff:
-        logging.info(f"Regenerating test and train data to offset initial loss diff {abs(train_loss - test_loss)}...")
+    while abs(loss_discrepency) > cfg.allowed_initial_loss_diff:
+        logging.info(f"Regenerating test and train data to offset initial loss diff {loss_discrepency}...")
         test_loader, train_loader = forming_train_and_test_data(batch_size, cfg, data)
-        # pretraining loss
         train_loss, test_loss = evaluate(model, train_loader, criterion, device), \
                                 evaluate(model, test_loader, criterion, device)
-        logging.info(f"current loss difference is {abs(train_loss - test_loss)}, train_loss is {train_loss}")
-    train_losses.append(train_loss)
-    test_losses.append(test_loss)
-    logging.info(f"Pretraining losses for train and test dataset are {train_loss}, {test_loss}, respectively.")
+        loss_discrepency = train_loss - test_loss
+        logging.info(f"current loss difference is {loss_discrepency}, train_loss is {train_loss}, test_loss is {test_loss}")
+        if abs(loss_discrepency) <= cfg.allowed_initial_loss_diff:
+            train_losses.append(train_loss)
+            test_losses.append(test_loss)
+    # logging.info(f"Pretraining losses for train and test dataset are {train_loss}, {test_loss}, respectively.")
     for epoch in range(epochs):
         train_loss = train(model, train_loader, optimizer, criterion, device)
         test_loss = evaluate(model, test_loader, criterion, device)
@@ -102,13 +112,12 @@ def main(cfg: DictConfig):
         if early_stopper.early_stop:
             logging.warning("Early stopping")
             break
-
-    plot_losses(train_losses, test_losses, save_path=
+    data_type = str(cfg.training_input_fp).strip("_cricket_training_data.csv").strip("_cricket_training_data").strip("data/")
+    plot_losses(train_losses, test_losses, data_type=data_type, save_path=
     f"{cfg.loss_plot_fp}_target_val_{cfg.target_lower_limit}_{cfg.target_upper_limit}")
 
 
 def forming_train_and_test_data(batch_size, cfg, data):
-    del data['start_time']
     train_df = data.sample(frac=0.8,
                            weights=data.groupby(list(cfg.stratefied_sampling_categories))[cfg.response].transform(
                                'count'))

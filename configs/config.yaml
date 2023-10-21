@@ -3,13 +3,14 @@
 categorical_features:
   - "player_id"
   - "player_team_id"
-#  - "home_team_id"
+  - "home_team_id"
+  - "opponent_team_id"
   - "ground_id"
   - "international_class_id"
   - "floodlit"
   - "neutral_match"
   - "international_valid"
-#  - "followon"
+  - "followon"
   - "rain_rule"
   - "target_id"
   - "is_home"
@@ -18,32 +19,31 @@ numerical_features:
   - "days_extended"
   - "actual_days"
   - "current_age"
+  - "batting_order"
 
 # response
 response: "target_value"
 
-training_input_fp: "data/img20231006_16171399.csv"
+training_input_fp: "data/ODI_cricket_training_data.csv"
+filtered_training_data: "data/ODI_cricket_training_data_sampled.csv"
 model_fp: "chkpt"
 best_model_name: 'factorization_machine_model'
 loss_plot_fp: "loss_curves"
 
-inference_input_fp: "data/img20231006_16171399.csv"
+inference_input_fp: "data/ODI_cricket_inference_data.csv"
 
-# choose up to 20k when target value range [10, 200], otherwise, can be up to 100k
-training_sample_size: 30000
-# Consider only two scenarios: target value [0, 10] or [10, 200]
+training_sample_size: 40000
 target_lower_limit: 0
-target_upper_limit: 10
+target_upper_limit: 20
 
 minority_sample_limit: 10
 minority_sampling_categories: ["player_id", "target_id", "target_value"]
-stratefied_sampling_categories: ["target_id"]
+stratefied_sampling_categories: ["player_id", "target_id", "target_value"]
 
-# use a value between [1.5, 3] when data size greater than 20k, otherwise can be [0.2, 0.5]
-allowed_initial_loss_diff: 1.5
+allowed_initial_loss_diff: 3
 
 epoch: 100
-learning_rate: 1e-5
+learning_rate: 5e-6
 batch_size: 16
 weight_decay: 1e-8
 embedding_dim: 20
