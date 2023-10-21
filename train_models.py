@@ -57,7 +57,7 @@ def main(cfg: DictConfig):
     logging.info(f"{data.describe()}")
     data = shuffle(data)
     data.reset_index(inplace=True, drop=True)
-    data.to_csv(cfg.filtered_training_data, index=False)
+    data.to_csv(cfg.sampled_training_data, index=False)
 
     # Data scaling
     for col in cfg.categorical_features:

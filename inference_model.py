@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: DictConfig):
     batch_size = cfg.batch_size
-    training_input_fp = cfg.filtered_training_data
+    training_input_fp = cfg.sampled_training_data
     inference_input_fp = cfg.inference_input_fp
 
     if torch.cuda.is_available():

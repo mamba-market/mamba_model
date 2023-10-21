@@ -25,7 +25,7 @@ numerical_features:
 response: "target_value"
 
 training_input_fp: "data/ODI_cricket_training_data.csv"
-filtered_training_data: "data/ODI_cricket_training_data_sampled.csv"
+sampled_training_data: "data/ODI_cricket_training_data_sampled.csv"
 model_fp: "chkpt"
 best_model_name: 'factorization_machine_model'
 loss_plot_fp: "loss_curves"
