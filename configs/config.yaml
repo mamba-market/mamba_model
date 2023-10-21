@@ -43,8 +43,8 @@ stratefied_sampling_categories: ["player_id", "target_id", "target_value"]
 allowed_initial_loss_diff: 3
 
 epoch: 100
-learning_rate: 5e-6
-batch_size: 16
+learning_rate: 5e-5
+batch_size: 32
 weight_decay: 1e-8
 embedding_dim: 20
 attention_dim: 20
