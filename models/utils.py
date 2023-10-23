@@ -5,11 +5,14 @@ import pandas
 import seaborn as sns
 import matplotlib.pyplot as plt
 import torch
+import torch.nn.functional as F
 from torchfm.dataset.avazu import AvazuDataset
 from torchfm.dataset.criteo import CriteoDataset
 from torchfm.dataset.movielens import MovieLens1MDataset, MovieLens20MDataset
 from torchfm.model.fm import FactorizationMachineModel
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.preprocessing import LabelEncoder, StandardScaler, KBinsDiscretizer
+from sklearn.metrics import f1_score, precision_score, recall_score, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
 def get_dataset(name, path):
@@ -85,6 +88,50 @@ def evaluate(model, data_loader, criterion, device):
     return total_loss / len(data_loader)
 
 
+def assemble_true_labels_and_predictions(model, dataloader, device):
+    model.eval()
+    true_labels = []
+    predictions = []
+
+    with torch.no_grad():
+        for cat_data, num_data, targets in dataloader:
+            cat_data, num_data, targets = cat_data.to(device), num_data.to(device), targets.to(device)
+            outputs = model(cat_data, num_data).squeeze()
+
+            true_labels.extend(targets.cpu().numpy())
+            predictions.extend(outputs.cpu().numpy())
+
+    return true_labels, predictions
+
+
+class WeightedMAELoss(torch.nn.Module):
+    def __init__(self):
+        super(WeightedMAELoss, self).__init__()
+
+    def forward(self, predictions, targets, weighted=False):
+        if weighted:
+            weights = compute_weights(targets.detach().cpu().numpy())
+            weights = weights.to(predictions.device)  # Ensure weights are on the same device as predictions
+            losses = F.l1_loss(predictions, targets, reduction='none')
+            return (losses * weights / weights.sum()).mean()
+        losses = F.l1_loss(predictions, targets, reduction='none')
+        return losses.mean()
+
+
+
+def compute_weights(targets, n_bins=10):
+    # Bin the continuous target values
+    kbins = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='uniform', subsample=None)
+    binned_targets = kbins.fit_transform(targets.reshape(-1, 1)).ravel()
+
+    # Compute inverse bin frequencies
+    bin_counts = numpy.bincount(binned_targets.astype(int))
+    inv_bin_weights = 1. / (bin_counts + 1e-3)  # adding a small constant to avoid division by zero
+    weights = inv_bin_weights[binned_targets.astype(int)]
+
+    return torch.tensor(weights, dtype=torch.float32)
+
+
 def inference(model, data_loader, device):
     model.eval()
     outputs = []
@@ -109,6 +156,51 @@ def plot_losses(train_losses, test_losses, data_type = 'ODI', save_path='loss_cu
     plt.figure(figsize=(10, 6))
     sns.lineplot(data=df_losses, x='Epoch', y='Loss', hue='Type', marker='o')
     plt.title(f'Training and Testing MAE Losses {data_type}')
+    plt.savefig(os.path.join("results", f"{save_path}.png"))
+
+
+def plot_confusion_matrix(conf_matrix, class_names, data_type = 'ODI', save_path='confusion_matrix'):
+    plt.figure(figsize=(12, 9))
+    sns.heatmap(conf_matrix, annot=True, fmt="d", cmap=plt.cm.Blues, xticklabels=class_names, yticklabels=class_names)
+    plt.ylabel('Actual')
+    plt.xlabel('Predicted')
+    plt.title(f'Confusion Matrix {data_type}')
+    plt.savefig(os.path.join("results", f"{save_path}.png"))
+
+
+def evaluate_regression(true_values, predicted_values, convert_to_int=False):
+    if convert_to_int:
+        true_values = list(map(int, true_values))
+        predicted_values = list(map(int, predicted_values))
+    mae = mean_absolute_error(true_values, predicted_values)
+    mse = mean_squared_error(true_values, predicted_values)
+    r2 = r2_score(true_values, predicted_values)
+
+    return {
+        'Mean Absolute Error': mae,
+        'Mean Squared Error': mse,
+        'R-squared': r2
+    }
+
+
+def plot_f1_score_and_confusion_matrix(true_labels, predicted_labels, class_names,
+                                       data_type = 'ODI', save_path='confusion_matrix'):
+    # Compute metrics
+    f1_micro = f1_score(true_labels, predicted_labels, average='micro')
+    f1_macro = f1_score(true_labels, predicted_labels, average='macro')
+    precision = precision_score(true_labels, predicted_labels, average='weighted')
+    recall = recall_score(true_labels, predicted_labels, average='weighted')
+
+    # Compute confusion matrix
+    conf_matrix = confusion_matrix(true_labels, predicted_labels, labels=list(range(21)))
+
+    # Display confusion matrix
+    title = f'F1 (Micro): {f1_micro:.4f}, F1 (Macro): {f1_macro:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}'
+    title += f"\n{data_type}"
+    disp = ConfusionMatrixDisplay(confusion_matrix=conf_matrix, display_labels=class_names)
+    fig, ax = plt.subplots(figsize=(10, 10))
+    disp.plot(ax=ax)
+    ax.set_title(title)
     plt.savefig(os.path.join("results", f"{save_path}.png"))
 
 
@@ -170,5 +262,13 @@ class Standardizer(object):
         :return:
         """
         return self.standardizer.transform(numpy.array(data_list).reshape(-1, 1)).squeeze().tolist()
+
+    def inverse_transform(self, data_list):
+        """
+        Inversely transform data to the original scale
+        :param data_list:
+        :return:
+        """
+        return self.standardizer.inverse_transform(numpy.array(data_list).reshape(-1, 1)).squeeze().tolist()
 
 

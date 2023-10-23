@@ -24,27 +24,31 @@ numerical_features:
 # response
 response: "target_value"
 
-training_input_fp: "data/ODI_cricket_training_data.csv"
-sampled_training_data: "data/ODI_cricket_training_data_sampled.csv"
+training_input_fp: "data/T20I_cricket_training_data.csv"
+sampled_training_data: "data/T20I_cricket_training_data_sampled.csv"
 model_fp: "chkpt"
 best_model_name: 'factorization_machine_model'
 loss_plot_fp: "loss_curves"
+plot_confusion_metrics_for_narrow_zone: false
+confusion_matrix_fp: "confusion_matrix"
+eval_metrics_fp: "eval_metrics"
 
-inference_input_fp: "data/ODI_cricket_inference_data.csv"
+inference_input_fp: "data/T20I_cricket_inference_data.csv"
 
-training_sample_size: 40000
-target_lower_limit: 0
-target_upper_limit: 20
+training_sample_size: null
+target_lower_limit: 20
+target_upper_limit: 50
 
 minority_sample_limit: 10
 minority_sampling_categories: ["player_id", "target_id", "target_value"]
 stratefied_sampling_categories: ["player_id", "target_id", "target_value"]
 
-allowed_initial_loss_diff: 3
+allowed_initial_loss_diff: 0.5
 
-epoch: 100
-learning_rate: 5e-5
-batch_size: 32
+epoch: 40
+learning_rate: 1e-5
+batch_size: 16
 weight_decay: 1e-8
 embedding_dim: 20
 attention_dim: 20
+hidden_layers: [32]

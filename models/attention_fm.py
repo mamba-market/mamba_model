@@ -2,6 +2,7 @@
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class Attention(nn.Module):
@@ -70,6 +71,105 @@ class FactorizationMachine(nn.Module):
 
         return y_pred
 
+
+class DeepFactorizationMachine(nn.Module):
+    def __init__(self, field_dims, embedding_dim, num_numerical, hidden_units, n_classes=21):
+        super(DeepFactorizationMachine, self).__init__()
+        self.field_dims = field_dims
+        self.embedding_dim = embedding_dim
+        self.n_fields = len(field_dims)
+
+        # Embeddings for categorical features
+        self.embedding = nn.Embedding(sum(field_dims), embedding_dim)
+        self.offsets = torch.tensor((0, *torch.cumsum(torch.tensor(field_dims, dtype=torch.long), 0)[:-1]),
+                                    dtype=torch.long)
+
+        # Numerical feature processing layer
+        self.fc_num = nn.Linear(num_numerical, embedding_dim)
+
+        # Hidden layers
+        input_size = embedding_dim * (self.n_fields + 1)  # +1 for the numerical features
+        layers = []
+        for dim in hidden_units:
+            layers.append(nn.Linear(input_size, dim))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(p=0.5))  # Dropout for regularization, can adjust as needed
+            input_size = dim
+        self.hidden_layers = nn.Sequential(*layers)
+
+        # Final output layer
+        self.output_layer = nn.Linear(hidden_units[-1], n_classes)
+
+    def forward(self, x_cat, x_num):
+        """
+        x_cat: Long tensor of size (batch_size, n_fields) for categorical features
+        x_num: Float tensor of size (batch_size, num_numerical) for numerical features
+        """
+        # Embedding for categorical features
+        x_cat = x_cat + self.offsets.clone().detach().unsqueeze(0)
+        embed_cat = self.embedding(x_cat)
+
+        # Numerical feature processing
+        embed_num = F.relu(self.fc_num(x_num))
+
+        # Concatenate processed numerical features and embeddings
+        all_features = torch.cat([embed_cat.view(embed_cat.size(0), -1), embed_num], 1)
+
+        # Pass through hidden layers
+        features = self.hidden_layers(all_features)
+
+        # Output layer
+        logits = self.output_layer(features)
+
+        return F.softmax(logits, dim=1)
+
+
+class DeepFactorizationMachineRegression(nn.Module):
+    def __init__(self, field_dims, embedding_dim, num_numerical, hidden_units):
+        super(DeepFactorizationMachineRegression, self).__init__()
+
+        # Categorical embeddings
+        self.embedding = nn.Embedding(sum(field_dims), embedding_dim)
+        self.embed_output_size = len(field_dims) * embedding_dim
+
+        # Fully connected layers for combined embeddings and numerical fields
+        mlp_input_dim = self.embed_output_size + num_numerical
+        self.mlp = MLP(mlp_input_dim, hidden_units)
+
+        # Regression output
+        self.linear = nn.Linear(hidden_units[-1], 1)
+
+    def forward(self, x_categorical, x_numerical):
+        """
+        x_categorical: Tensor of shape [batch_size, num_fields]
+        x_numerical: Tensor of shape [batch_size, num_numerical_features]
+        """
+        embeds = self.embedding(x_categorical)
+        embeds = embeds.view(-1, self.embed_output_size)
+
+        # Concatenate embeddings and numerical features
+        x = torch.cat([embeds, x_numerical], dim=1)
+
+        x = self.mlp(x)
+        x = self.linear(x)
+
+        return x.squeeze(1)  # Regression output
+
+
+class MLP(nn.Module):
+    def __init__(self, input_dim, hidden_units, dropout=0.5):
+        super(MLP, self).__init__()
+        layers = []
+        input_units = input_dim
+        for units in hidden_units:
+            layers.append(nn.Linear(input_units, units))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(p=dropout))
+            input_units = units
+        self.mlp = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.mlp(x)
 
 
 class EarlyStopping:
