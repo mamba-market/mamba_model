@@ -23,6 +23,7 @@ numerical_features:
 
 # response
 response: "target_value"
+response_binary: "target_value_binary"
 
 training_input_fp: "data/T20I_cricket_training_data.csv"
 sampled_training_data: "data/T20I_cricket_training_data_sampled.csv"
@@ -36,12 +37,15 @@ eval_metrics_fp: "eval_metrics"
 inference_input_fp: "data/T20I_cricket_inference_data.csv"
 
 training_sample_size: null
-target_lower_limit: 20
-target_upper_limit: 50
+# the following two params are fixed to 0 and 70 respectively when model_stage is classification
+target_lower_limit: 0
+target_upper_limit: 70
 
+model_stage: "classification" # or "regression"
+classification_target_threshold: 20
 minority_sample_limit: 10
 minority_sampling_categories: ["player_id", "target_id", "target_value"]
-stratefied_sampling_categories: ["player_id", "target_id", "target_value"]
+stratefied_sampling_categories: ["player_id", "target_id"]
 
 allowed_initial_loss_diff: 0.5
 

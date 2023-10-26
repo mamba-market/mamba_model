@@ -68,7 +68,7 @@ def train(model, data_loader, optimizer, criterion, device):
     for cat_data, num_data, targets in data_loader:
         cat_data, num_data, targets = cat_data.to(device), num_data.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs = model(cat_data, num_data).squeeze()
+        outputs = model(cat_data, num_data)#.squeeze()
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -82,7 +82,7 @@ def evaluate(model, data_loader, criterion, device):
     with torch.no_grad():
         for cat_data, num_data, targets in data_loader:
             cat_data, num_data, targets = cat_data.to(device), num_data.to(device), targets.to(device)
-            outputs = model(cat_data, num_data).squeeze()
+            outputs = model(cat_data, num_data)#.squeeze()
             loss = criterion(outputs, targets)
             total_loss += loss.item()
     return total_loss / len(data_loader)
@@ -139,7 +139,6 @@ def inference(model, data_loader, device):
         for cat_data, num_data, targets in data_loader:
             cat_data, num_data, targets = cat_data.to(device), num_data.to(device), targets.to(device)
             outputs.extend(model(cat_data, num_data).squeeze())
-    outputs = [float(output) for output in outputs]
     return outputs
 
 
@@ -192,7 +191,7 @@ def plot_f1_score_and_confusion_matrix(true_labels, predicted_labels, class_name
     recall = recall_score(true_labels, predicted_labels, average='weighted')
 
     # Compute confusion matrix
-    conf_matrix = confusion_matrix(true_labels, predicted_labels, labels=list(range(21)))
+    conf_matrix = confusion_matrix(true_labels, predicted_labels, labels=list(range(len(class_names))))
 
     # Display confusion matrix
     title = f'F1 (Micro): {f1_micro:.4f}, F1 (Macro): {f1_macro:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}'

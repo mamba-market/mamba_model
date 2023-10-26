@@ -84,27 +84,27 @@ def balance_dataset(df, target_column):
 
 
 def forming_train_and_test_data(batch_size, cfg, data):
+    response = cfg.response if cfg.model_stage == 'regression' else cfg.response_binary
     train_df = data.sample(frac=0.8,
-                           weights=data.groupby(list(cfg.stratefied_sampling_categories))[cfg.response].transform(
+                           weights=data.groupby(list(cfg.stratefied_sampling_categories))[response].transform(
                                'count'))
     test_df = data.drop(train_df.index).copy()
     train_df.reset_index(inplace=True, drop=True)
     test_df.reset_index(inplace=True, drop=True)
-    train_df = balance_dataset(train_df, target_column=cfg.response)
-    test_df = balance_dataset(test_df, target_column=cfg.response)
+    train_df = balance_dataset(train_df, target_column=response)
+    test_df = balance_dataset(test_df, target_column=response)
     logging.info("Sizes of training and testing datasets")
-    logging.info(f"Training: {len(train_df)} \n {train_df.groupby(list(cfg.stratefied_sampling_categories)).size()}")
-    logging.info(f"Testing: {len(test_df)} \n {test_df.groupby(list(cfg.stratefied_sampling_categories)).size()}")
-    for stratefied_sampling_category in cfg.stratefied_sampling_categories:
+    stratefied_sampling_categories = list(cfg.stratefied_sampling_categories) + [response]
+    logging.info(f"Training: {len(train_df)} \n {train_df.groupby(stratefied_sampling_categories).size()}")
+    logging.info(f"Testing: {len(test_df)} \n {test_df.groupby(stratefied_sampling_categories).size()}")
+    for stratefied_sampling_category in stratefied_sampling_categories:
         logging.info(f"Training data value counts on {stratefied_sampling_category}, "
                      f"{train_df[stratefied_sampling_category].value_counts()}")
         logging.info(f"Testing data value counts on {stratefied_sampling_category}, "
                      f"{test_df[stratefied_sampling_category].value_counts()}")
     # composing dataset
-    train_dataset = CriketScoreDataSetWithCatAndNum(train_df, cfg.categorical_features, cfg.numerical_features,
-                                                    cfg.response)
-    test_dataset = CriketScoreDataSetWithCatAndNum(test_df, cfg.categorical_features, cfg.numerical_features,
-                                                   cfg.response)
+    train_dataset = CriketScoreDataSetWithCatAndNum(train_df, cfg.categorical_features, cfg.numerical_features, response)
+    test_dataset = CriketScoreDataSetWithCatAndNum(test_df, cfg.categorical_features, cfg.numerical_features, response)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
     logging.info(f"Data loader assembled.")

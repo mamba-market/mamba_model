@@ -72,9 +72,9 @@ class FactorizationMachine(nn.Module):
         return y_pred
 
 
-class DeepFactorizationMachine(nn.Module):
+class DeepFactorizationMachineClassification(nn.Module):
     def __init__(self, field_dims, embedding_dim, num_numerical, hidden_units, n_classes=21):
-        super(DeepFactorizationMachine, self).__init__()
+        super(DeepFactorizationMachineClassification, self).__init__()
         self.field_dims = field_dims
         self.embedding_dim = embedding_dim
         self.n_fields = len(field_dims)
