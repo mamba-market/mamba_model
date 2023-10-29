@@ -1,7 +1,9 @@
 """This module implements the model (FM, factorization machine) training process"""
 import os
+import numpy
 import pandas
 import logging
+from datetime import datetime
 import hydra
 from omegaconf import DictConfig
 import torch
@@ -19,11 +21,11 @@ logging.basicConfig(level=logging.INFO)
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: DictConfig):
     batch_size = cfg.batch_size
-    training_input_fp = cfg.sampled_training_data
     inference_input_fp = cfg.inference_input_fp
     data_type = str(cfg.training_input_fp).strip("_cricket_training_data.csv").strip("_cricket_training_data").strip(
         "data/")
-
+    training_input_fp = f"data/{data_type}_sampled_cricket_training_data_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}.csv"
+    inference_output_fp = f"inference_results/game_preds_{datetime.strftime(datetime.utcnow(), '%Y-%m-%d')}.csv"
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -39,7 +41,9 @@ def main(cfg: DictConfig):
         data = pandas.read_csv(inference_input_fp)
     else:
         data = pandas.read_pickle(inference_input_fp)
-    data[cfg.response_binary] = data[cfg.response].apply(lambda x: 0 if x < cfg.classification_target_threshold else 1)
+    if cfg.response not in data.columns:
+        data[cfg.response] = numpy.random.randn(len(data))
+        data[cfg.response_binary] = data[cfg.response].apply(lambda x: 0 if x < cfg.classification_target_threshold else 1)
 
     # transform categorical data and numerical data with label encoders and standardizers
     for col in cfg.categorical_features:
@@ -61,8 +65,6 @@ def main(cfg: DictConfig):
     dims_categorical_vars = list(map(int, [training_data[col].max() + 1 for col in cfg.categorical_features]))
     dim_numerical_vars = len(cfg.numerical_features)
 
-    # splitting data
-    data = shuffle(data)
     logging.info(f"Inference: {len(data)}")
     # composing dataset
     response = cfg.response if cfg.model_stage == 'regression' else cfg.response_binary
@@ -107,7 +109,13 @@ def main(cfg: DictConfig):
 
     logging.info(f"Below are the inference results given your input data, shape {len(predictions)}:")
     logging.info(f"Top 100, remaining truncated, \n{predictions[:100]}")
-
+    data[f'predicted_{cfg.response}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
+    if os.path.exists(inference_output_fp): ## append current models results to existing inference CSV.
+        results = pandas.read_csv(inference_output_fp)
+        results[f'predicted_{cfg.response}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
+        results.to_csv(inference_output_fp, index=False)
+    else:
+        data.to_csv(inference_output_fp, index=False)
 
 
 if __name__ == '__main__':

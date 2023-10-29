@@ -1,0 +1,3 @@
+Mean Absolute Error:5.368421052631579
+Mean Squared Error:73.55263157894737
+R-squared:-0.046403940886699635

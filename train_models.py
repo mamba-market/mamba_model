@@ -26,6 +26,7 @@ def main(cfg: DictConfig):
     input_fp = cfg.training_input_fp
     data_type = str(cfg.training_input_fp).strip("_cricket_training_data.csv").strip("_cricket_training_data").strip(
         "data/")
+    sampled_training_data_fp = f"data/{data_type}_sampled_cricket_training_data_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}.csv"
 
     if torch.cuda.is_available():
         device = torch.device('cuda')
@@ -63,60 +64,20 @@ def main(cfg: DictConfig):
     data = shuffle(data)
     data[cfg.response_binary] = data[cfg.response].apply(lambda x: 0 if x < cfg.classification_target_threshold else 1)
     data.reset_index(inplace=True, drop=True)
-    data.to_csv(cfg.sampled_training_data, index=False)
 
-    # Data scaling
-    for col in cfg.categorical_features:
-        # data[col] = data[col].astype('str')
-        le = LabelEncoderExt()
-        le.fit(data[col])
-        data[col] = le.transform(data[col])
-        logging.info(f"Converting feature {col} into {len(le.classes_)} levels, with {data[col].unique().shape[0]} classes.")
-    # le = LabelEncoder()
-    # data[cfg.response_binary] = le.fit_transform(data[cfg.response_binary])
-    # logging.info(f"Classes of response: {le.classes_}")
-
-    standardizer = Standardizer()
-    for col in cfg.numerical_features + [cfg.response]:
-        standardizer = Standardizer()
-        standardizer.fit(data[col])
-        data[col] = standardizer.transform(data[col])
-
-    dims_categorical_vars = [data[col].max() + 1 for col in cfg.categorical_features]
-    dim_numerical_vars = len(cfg.numerical_features)
-    logging.info(f"Total dims of categorical vars: \n{dims_categorical_vars}")
-    logging.info(f"Dim of numerical vars: \n{dim_numerical_vars}")
-    logging.info(f"Range of target value: {data[cfg.response].min(), data[cfg.response].max()}")
-    # import ipdb; ipdb.set_trace()
-
-    # model initialization
-    if cfg.model_stage == 'regression':
-        model = DeepFactorizationMachineRegression(field_dims=dims_categorical_vars,
-                                     embedding_dim=cfg.embedding_dim,
-                                     num_numerical=dim_numerical_vars,
-                                     hidden_units=cfg.hidden_layers).to(device)
-        criterion = WeightedMAELoss()
-    else:
-        model = DeepFactorizationMachineClassification(field_dims=dims_categorical_vars,
-                                                       embedding_dim=cfg.embedding_dim,
-                                                       num_numerical=dim_numerical_vars,
-                                                       hidden_units=cfg.hidden_layers,
-                                                       n_classes=len(data[cfg.response_binary].unique()))
-        criterion = CrossEntropyLoss()
-
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    early_stopper = EarlyStopping(patience=3, checkpoint_path=cfg.model_fp,
-                                  checkpoint_filename=f"{cfg.model_stage}_{cfg.best_model_name}_dt_{data_type}_tz_"
-                                                      f"{cfg.target_lower_limit}_{cfg.target_upper_limit}.pth")
+    test_loader, train_loader, train_df, test_df, train_df_original, test_df_original,  response_standardizer = forming_train_and_test_data(batch_size, cfg, data)
+    criterion, early_stopper, model, optimizer = construct_model(cfg, data, data_type, device, learning_rate, train_df,
+                                                                 weight_decay)
     logging.info("Model successfully initialized.")
-
     train_losses, test_losses = [], []
     # splitting data, still following the stratified rule.
     loss_discrepency = float('inf')
-    test_loader, train_loader = forming_train_and_test_data(batch_size, cfg, data)
     while abs(loss_discrepency) > cfg.allowed_initial_loss_diff:
         logging.info(f"Regenerating test and train data to offset initial loss diff {loss_discrepency}...")
-        test_loader, train_loader = forming_train_and_test_data(batch_size, cfg, data)
+        test_loader, train_loader, train_df, test_df, train_df_original, test_df_original, response_standardizer = forming_train_and_test_data(batch_size,
+                                                                                                          cfg, data)
+        criterion, early_stopper, model, optimizer = construct_model(cfg, data, data_type, device, learning_rate,
+                                                                     train_df, weight_decay)
         train_loss, test_loss = evaluate(model, train_loader, criterion, device), \
                                 evaluate(model, test_loader, criterion, device)
         loss_discrepency = train_loss - test_loss
@@ -124,6 +85,7 @@ def main(cfg: DictConfig):
         if abs(loss_discrepency) <= cfg.allowed_initial_loss_diff:
             train_losses.append(train_loss)
             test_losses.append(test_loss)
+    train_df_original.to_csv(sampled_training_data_fp, index=False)
     # logging.info(f"Pretraining losses for train and test dataset are {train_loss}, {test_loss}, respectively.")
     for epoch in range(epochs):
         train_loss = train(model, train_loader, optimizer, criterion, device)
@@ -140,8 +102,10 @@ def main(cfg: DictConfig):
     f"{cfg.model_stage}_{cfg.loss_plot_fp}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}")
     y_trues, y_preds = assemble_true_labels_and_predictions(model, test_loader, device)
     if cfg.model_stage == 'regression':
-        y_trues, y_preds = standardizer.inverse_transform(y_trues), standardizer.inverse_transform(y_preds)
+        y_trues, y_preds = response_standardizer.inverse_transform(y_trues), response_standardizer.inverse_transform(y_preds)
         metrics = evaluate_regression(y_trues, y_preds, convert_to_int=True)
+        logging.info(f'y_trues: {y_trues[:30]}')
+        logging.info(f"y_preds: {y_preds[:30]}")
         eval_metrics_fp = f"{cfg.model_stage}_{cfg.eval_metrics_fp}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}.txt"
         with open(os.path.join('results', eval_metrics_fp), 'w') as f:
             for key, value in metrics.items():
@@ -156,7 +120,32 @@ def main(cfg: DictConfig):
                                                             f"_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}")
 
 
-
+def construct_model(cfg, data, data_type, device, learning_rate, train_df, weight_decay):
+    dims_categorical_vars = [train_df[col].max() + 1 for col in cfg.categorical_features]
+    dim_numerical_vars = len(cfg.numerical_features)
+    logging.info(f"Total dims of categorical vars: \n{dims_categorical_vars}")
+    logging.info(f"Dim of numerical vars: \n{dim_numerical_vars}")
+    logging.info(f"Range of target value: {data[cfg.response].min(), data[cfg.response].max()}")
+    # import ipdb; ipdb.set_trace()
+    # model initialization
+    if cfg.model_stage == 'regression':
+        model = DeepFactorizationMachineRegression(field_dims=dims_categorical_vars,
+                                                   embedding_dim=cfg.embedding_dim,
+                                                   num_numerical=dim_numerical_vars,
+                                                   hidden_units=cfg.hidden_layers).to(device)
+        criterion = WeightedMAELoss()
+    else:
+        model = DeepFactorizationMachineClassification(field_dims=dims_categorical_vars,
+                                                       embedding_dim=cfg.embedding_dim,
+                                                       num_numerical=dim_numerical_vars,
+                                                       hidden_units=cfg.hidden_layers,
+                                                       n_classes=len(data[cfg.response_binary].unique()))
+        criterion = CrossEntropyLoss()
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    early_stopper = EarlyStopping(patience=3, checkpoint_path=cfg.model_fp,
+                                  checkpoint_filename=f"{cfg.model_stage}_{cfg.best_model_name}_dt_{data_type}_tz_"
+                                                      f"{cfg.target_lower_limit}_{cfg.target_upper_limit}.pth")
+    return criterion, early_stopper, model, optimizer
 
 
 if __name__ == '__main__':

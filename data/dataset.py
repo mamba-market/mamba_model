@@ -4,6 +4,8 @@ import numpy as np
 import pandas
 import torch
 from torch.utils.data import DataLoader, Dataset
+from models.utils import LabelEncoderExt, Standardizer
+from sklearn.model_selection import train_test_split
 
 logging.basicConfig(level=logging.INFO)
 
@@ -83,16 +85,48 @@ def balance_dataset(df, target_column):
     return resampled_df
 
 
+def scale_data(cfg, train_df, test_df):
+    # Data scaling
+    train_df_original, test_df_original = train_df.copy(), test_df.copy()
+    for col in cfg.categorical_features:
+        # data[col] = data[col].astype('str')
+        le = LabelEncoderExt()
+        le.fit(train_df[col])
+        train_df[col] = le.transform(train_df[col])
+        logging.info(
+            f"Converting feature {col} into {len(le.classes_)} levels, with {train_df[col].unique().shape[0]} classes.")
+
+        try:
+            test_df[col] = le.transform(test_df[col])
+        except Exception:
+            logging.warning(f"Unseen categorical variable level {col}:, \n"
+                            f"{set(test_df[col].unique()) - set(train_df[col].unique())}")
+
+    # le = LabelEncoder()
+    # data[cfg.response_binary] = le.fit_transform(data[cfg.response_binary])
+    # logging.info(f"Classes of response: {le.classes_}")
+    standardizer = Standardizer()
+    for col in cfg.numerical_features + [cfg.response]:
+        standardizer = Standardizer()
+        standardizer.fit(train_df[col])
+        train_df[col] = standardizer.transform(train_df[col])
+        test_df[col] = standardizer.transform(test_df[col])
+    response_standardizer = standardizer
+    return train_df, test_df, train_df_original, test_df_original, response_standardizer
+
+
 def forming_train_and_test_data(batch_size, cfg, data):
     response = cfg.response if cfg.model_stage == 'regression' else cfg.response_binary
-    train_df = data.sample(frac=0.8,
-                           weights=data.groupby(list(cfg.stratefied_sampling_categories))[response].transform(
-                               'count'))
-    test_df = data.drop(train_df.index).copy()
+    data['stratify_col'] = data[list(cfg.stratefied_sampling_categories)].apply(lambda x: '_'.join(x.map(str)), axis=1)
+    counts = data['stratify_col'].value_counts()
+    to_remove = counts[counts < 2].index # remove classes with fewer samples than this
+    data = data[~data['stratify_col'].isin(to_remove)]
+    train_df, test_df = train_test_split(data, test_size=0.2, stratify=data['stratify_col'])
     train_df.reset_index(inplace=True, drop=True)
     test_df.reset_index(inplace=True, drop=True)
     train_df = balance_dataset(train_df, target_column=response)
     test_df = balance_dataset(test_df, target_column=response)
+    train_df, test_df, train_df_original, test_df_original, response_standardizer = scale_data(cfg, train_df, test_df)
     logging.info("Sizes of training and testing datasets")
     stratefied_sampling_categories = list(cfg.stratefied_sampling_categories) + [response]
     logging.info(f"Training: {len(train_df)} \n {train_df.groupby(stratefied_sampling_categories).size()}")
@@ -108,5 +142,5 @@ def forming_train_and_test_data(batch_size, cfg, data):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
     logging.info(f"Data loader assembled.")
-    return test_loader, train_loader
+    return test_loader, train_loader, train_df, test_df, train_df_original, test_df_original, response_standardizer
 
