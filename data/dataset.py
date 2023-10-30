@@ -116,6 +116,7 @@ def scale_data(cfg, train_df, test_df):
 
 
 def forming_train_and_test_data(batch_size, cfg, data):
+    data = data.copy()
     response = cfg.response if cfg.model_stage == 'regression' else cfg.response_binary
     data['stratify_col'] = data[list(cfg.stratefied_sampling_categories)].apply(lambda x: '_'.join(x.map(str)), axis=1)
     counts = data['stratify_col'].value_counts()

@@ -41,8 +41,9 @@ def main(cfg: DictConfig):
         data = pandas.read_csv(inference_input_fp)
     else:
         data = pandas.read_pickle(inference_input_fp)
+    data_original = data.copy()
     if cfg.response not in data.columns:
-        data[cfg.response] = numpy.random.randn(len(data))
+        data[cfg.response] = list(range(len(data)))
         data[cfg.response_binary] = data[cfg.response].apply(lambda x: 0 if x < cfg.classification_target_threshold else 1)
 
     # transform categorical data and numerical data with label encoders and standardizers
@@ -64,7 +65,7 @@ def main(cfg: DictConfig):
 
     dims_categorical_vars = list(map(int, [training_data[col].max() + 1 for col in cfg.categorical_features]))
     dim_numerical_vars = len(cfg.numerical_features)
-
+    print(dims_categorical_vars)
     logging.info(f"Inference: {len(data)}")
     # composing dataset
     response = cfg.response if cfg.model_stage == 'regression' else cfg.response_binary
@@ -95,11 +96,12 @@ def main(cfg: DictConfig):
         if cfg.model_stage == 'regression':
             predictions = list(map(lambda x: x, inference(model, test_loader, device)))
             y_trues, predictions = standardizer.inverse_transform(data[response]), standardizer.inverse_transform(predictions)
+            predictions = list(map(int, predictions))
             mae = MeanAbsoluteError()
             mae = mae(torch.Tensor(predictions), torch.Tensor(y_trues))
             logging.info(f"Mean inference score: \nMAE: {mae}")
         else:
-            predictions = list(map(lambda x: x.argmax(), inference(model, test_loader, device)))
+            predictions = list(map(lambda x: int(x.argmax()), inference(model, test_loader, device)))
             f1_micro = f1_score(data[response], predictions, average='micro')
             f1_macro = f1_score(data[response], predictions, average='macro')
             precision = precision_score(data[response], predictions, average='weighted')
@@ -109,13 +111,13 @@ def main(cfg: DictConfig):
 
     logging.info(f"Below are the inference results given your input data, shape {len(predictions)}:")
     logging.info(f"Top 100, remaining truncated, \n{predictions[:100]}")
-    data[f'predicted_{cfg.response}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
+    data_original[f'predicted_{cfg.response}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
     if os.path.exists(inference_output_fp): ## append current models results to existing inference CSV.
         results = pandas.read_csv(inference_output_fp)
-        results[f'predicted_{cfg.response}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
+        results[f'predicted_{cfg.response}_{cfg.model_stage}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
         results.to_csv(inference_output_fp, index=False)
     else:
-        data.to_csv(inference_output_fp, index=False)
+        data_original.to_csv(inference_output_fp, index=False)
 
 
 if __name__ == '__main__':

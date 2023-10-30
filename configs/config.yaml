@@ -10,7 +10,6 @@ categorical_features:
   - "floodlit"
   - "neutral_match"
   - "international_valid"
-  - "followon"
   - "rain_rule"
   - "target_id"
   - "is_home"
@@ -36,10 +35,10 @@ inference_input_fp: "data/match_to_predict.csv"
 
 training_sample_size: null
 # the following two params are fixed to 0 and 70 respectively when model_stage is classification
-target_lower_limit: 0
+target_lower_limit: 20
 target_upper_limit: 70
 
-model_stage: "classification" #"classification" or "regression"
+model_stage: "regression" #"classification" or "regression"
 classification_target_threshold: 20
 minority_sample_limit: 10
 minority_sampling_categories: ["player_id", "target_id", "target_value"]
@@ -47,7 +46,7 @@ stratefied_sampling_categories: ["player_id", "target_id"]
 
 allowed_initial_loss_diff: 0.5
 
-epoch: 40
+epoch: 60
 learning_rate: 1e-5
 batch_size: 16
 weight_decay: 1e-8

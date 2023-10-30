@@ -64,9 +64,8 @@ def main(cfg: DictConfig):
     data = shuffle(data)
     data[cfg.response_binary] = data[cfg.response].apply(lambda x: 0 if x < cfg.classification_target_threshold else 1)
     data.reset_index(inplace=True, drop=True)
-
-    test_loader, train_loader, train_df, test_df, train_df_original, test_df_original,  response_standardizer = forming_train_and_test_data(batch_size, cfg, data)
-    criterion, early_stopper, model, optimizer = construct_model(cfg, data, data_type, device, learning_rate, train_df,
+    test_loader, train_loader, train_df, test_df, train_df_original, test_df_original, response_standardizer = forming_train_and_test_data(batch_size, cfg, data)
+    criterion, early_stopper, model, optimizer = construct_model(cfg, data_type, device, learning_rate, train_df,
                                                                  weight_decay)
     logging.info("Model successfully initialized.")
     train_losses, test_losses = [], []
@@ -76,7 +75,7 @@ def main(cfg: DictConfig):
         logging.info(f"Regenerating test and train data to offset initial loss diff {loss_discrepency}...")
         test_loader, train_loader, train_df, test_df, train_df_original, test_df_original, response_standardizer = forming_train_and_test_data(batch_size,
                                                                                                           cfg, data)
-        criterion, early_stopper, model, optimizer = construct_model(cfg, data, data_type, device, learning_rate,
+        criterion, early_stopper, model, optimizer = construct_model(cfg, data_type, device, learning_rate,
                                                                      train_df, weight_decay)
         train_loss, test_loss = evaluate(model, train_loader, criterion, device), \
                                 evaluate(model, test_loader, criterion, device)
@@ -85,6 +84,8 @@ def main(cfg: DictConfig):
         if abs(loss_discrepency) <= cfg.allowed_initial_loss_diff:
             train_losses.append(train_loss)
             test_losses.append(test_loss)
+
+    print([train_df[col].max() + 1 for col in cfg.categorical_features])
     train_df_original.to_csv(sampled_training_data_fp, index=False)
     # logging.info(f"Pretraining losses for train and test dataset are {train_loss}, {test_loss}, respectively.")
     for epoch in range(epochs):
@@ -120,12 +121,12 @@ def main(cfg: DictConfig):
                                                             f"_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}")
 
 
-def construct_model(cfg, data, data_type, device, learning_rate, train_df, weight_decay):
+def construct_model(cfg, data_type, device, learning_rate, train_df, weight_decay):
     dims_categorical_vars = [train_df[col].max() + 1 for col in cfg.categorical_features]
     dim_numerical_vars = len(cfg.numerical_features)
     logging.info(f"Total dims of categorical vars: \n{dims_categorical_vars}")
     logging.info(f"Dim of numerical vars: \n{dim_numerical_vars}")
-    logging.info(f"Range of target value: {data[cfg.response].min(), data[cfg.response].max()}")
+    logging.info(f"Range of target value: {train_df[cfg.response].min(), train_df[cfg.response].max()}")
     # import ipdb; ipdb.set_trace()
     # model initialization
     if cfg.model_stage == 'regression':
@@ -139,7 +140,7 @@ def construct_model(cfg, data, data_type, device, learning_rate, train_df, weigh
                                                        embedding_dim=cfg.embedding_dim,
                                                        num_numerical=dim_numerical_vars,
                                                        hidden_units=cfg.hidden_layers,
-                                                       n_classes=len(data[cfg.response_binary].unique()))
+                                                       n_classes=len(train_df[cfg.response_binary].unique()))
         criterion = CrossEntropyLoss()
     optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     early_stopper = EarlyStopping(patience=3, checkpoint_path=cfg.model_fp,
