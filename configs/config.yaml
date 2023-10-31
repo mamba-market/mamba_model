@@ -6,17 +6,17 @@ categorical_features:
   - "home_team_id"
   - "opponent_team_id"
   - "ground_id"
-  - "international_class_id"
+  - "position_id"
+  - "style_id"
   - "floodlit"
   - "neutral_match"
   - "international_valid"
   - "rain_rule"
   - "target_id"
   - "is_home"
+  - "actual_days"
 
 numerical_features:
-  - "days_extended"
-  - "actual_days"
   - "current_age"
   - "batting_order"
 
@@ -35,8 +35,8 @@ inference_input_fp: "data/match_to_predict.csv"
 
 training_sample_size: null
 # the following two params are fixed to 0 and 70 respectively when model_stage is classification
-target_lower_limit: 20
-target_upper_limit: 70
+target_lower_limit: 0
+target_upper_limit: 20
 
 model_stage: "regression" #"classification" or "regression"
 classification_target_threshold: 20
@@ -47,7 +47,7 @@ stratefied_sampling_categories: ["player_id", "target_id"]
 allowed_initial_loss_diff: 0.5
 
 epoch: 60
-learning_rate: 1e-5
+learning_rate: 5e-4
 batch_size: 16
 weight_decay: 1e-8
 embedding_dim: 20

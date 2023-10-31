@@ -103,7 +103,7 @@ def main(cfg: DictConfig):
     f"{cfg.model_stage}_{cfg.loss_plot_fp}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}")
     y_trues, y_preds = assemble_true_labels_and_predictions(model, test_loader, device)
     if cfg.model_stage == 'regression':
-        y_trues, y_preds = response_standardizer.inverse_transform(y_trues), response_standardizer.inverse_transform(y_preds)
+        y_trues, y_preds = response_standardizer.inverse_transform(y_trues, True), response_standardizer.inverse_transform(y_preds, True)
         metrics = evaluate_regression(y_trues, y_preds, convert_to_int=True)
         logging.info(f'y_trues: {y_trues[:30]}')
         logging.info(f"y_preds: {y_preds[:30]}")

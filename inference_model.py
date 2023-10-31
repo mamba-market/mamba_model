@@ -13,7 +13,7 @@ from sklearn.utils import shuffle
 from sklearn.metrics import f1_score, precision_score, recall_score
 from data.dataset import CriketScoreDataSetWithCatAndNum
 from models.attention_fm import DeepFactorizationMachineClassification, DeepFactorizationMachineRegression
-from models.utils import inference, LabelEncoderExt, Standardizer
+from models.utils import inference, LabelEncoderExt, Standardizer, assemble_true_labels_and_predictions
 
 logging.basicConfig(level=logging.INFO)
 
@@ -24,6 +24,7 @@ def main(cfg: DictConfig):
     inference_input_fp = cfg.inference_input_fp
     data_type = str(cfg.training_input_fp).strip("_cricket_training_data.csv").strip("_cricket_training_data").strip(
         "data/")
+    data_type = 'ODI'
     training_input_fp = f"data/{data_type}_sampled_cricket_training_data_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}.csv"
     inference_output_fp = f"inference_results/game_preds_{datetime.strftime(datetime.utcnow(), '%Y-%m-%d')}.csv"
     if torch.cuda.is_available():
@@ -60,8 +61,9 @@ def main(cfg: DictConfig):
     standardizer = Standardizer()
     for col in cfg.numerical_features + [cfg.response]:
         standardizer = Standardizer()
+        response_flag = True if col == cfg.response else False
         standardizer.fit(training_data[col])
-        data[col] = standardizer.transform(data[col])
+        data[col] = standardizer.transform(data[col], response_flag)
 
     dims_categorical_vars = list(map(int, [training_data[col].max() + 1 for col in cfg.categorical_features]))
     dim_numerical_vars = len(cfg.numerical_features)
@@ -94,8 +96,8 @@ def main(cfg: DictConfig):
 
     with torch.no_grad():  # Disable gradient computation
         if cfg.model_stage == 'regression':
-            predictions = list(map(lambda x: x, inference(model, test_loader, device)))
-            y_trues, predictions = standardizer.inverse_transform(data[response]), standardizer.inverse_transform(predictions)
+            predictions = list(map(lambda x: float(x), inference(model, test_loader, device)))
+            y_trues, predictions = standardizer.inverse_transform(data[response], True), standardizer.inverse_transform(predictions, True)
             predictions = list(map(int, predictions))
             mae = MeanAbsoluteError()
             mae = mae(torch.Tensor(predictions), torch.Tensor(y_trues))
@@ -110,7 +112,7 @@ def main(cfg: DictConfig):
             logging.info(f"Precision and recall {precision}, {recall}")
 
     logging.info(f"Below are the inference results given your input data, shape {len(predictions)}:")
-    logging.info(f"Top 100, remaining truncated, \n{predictions[:100]}")
+    logging.info(f"Top 100, remaining truncated, \n{predictions[:100]}, mean {numpy.mean(predictions)}")
     data_original[f'predicted_{cfg.response}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
     if os.path.exists(inference_output_fp): ## append current models results to existing inference CSV.
         results = pandas.read_csv(inference_output_fp)

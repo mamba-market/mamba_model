@@ -108,9 +108,10 @@ def scale_data(cfg, train_df, test_df):
     standardizer = Standardizer()
     for col in cfg.numerical_features + [cfg.response]:
         standardizer = Standardizer()
+        response_flag = True if col == cfg.response else False
         standardizer.fit(train_df[col])
-        train_df[col] = standardizer.transform(train_df[col])
-        test_df[col] = standardizer.transform(test_df[col])
+        train_df[col] = standardizer.transform(train_df[col], response_flag)
+        test_df[col] = standardizer.transform(test_df[col], response_flag)
     response_standardizer = standardizer
     return train_df, test_df, train_df_original, test_df_original, response_standardizer
 

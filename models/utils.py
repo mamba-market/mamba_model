@@ -11,6 +11,7 @@ from torchfm.dataset.criteo import CriteoDataset
 from torchfm.dataset.movielens import MovieLens1MDataset, MovieLens20MDataset
 from torchfm.model.fm import FactorizationMachineModel
 from sklearn.preprocessing import LabelEncoder, StandardScaler, KBinsDiscretizer
+from sklearn.preprocessing import PowerTransformer
 from sklearn.metrics import f1_score, precision_score, recall_score, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
@@ -237,11 +238,13 @@ class LabelEncoderExt(object):
 
 
 class Standardizer(object):
-    def __init__(self):
+    def __init__(self, constant=1.0):
         """
         A unified version of standardizer built on top of the sklearn StandardScaler() module
         """
         self.standardizer = StandardScaler()
+        self.power_transformer = PowerTransformer(method='yeo-johnson')
+        self.log_transform_constant = constant
 
     def fit(self, data_list):
         """
@@ -250,24 +253,28 @@ class Standardizer(object):
         :return: self
         """
         self.standardizer.fit(numpy.array(data_list).reshape(-1, 1))
+        self.power_transformer.fit(numpy.array(data_list).reshape(-1, 1))
         self.mean = self.standardizer.mean_[0]
         self.variance = self.standardizer.var_[0]
         return self
 
-    def transform(self, data_list):
+    def transform(self, data_list, response=False):
         """
         This will transform the data_list based on the mean and variance of the standardizer
         :param data_list:
         :return:
         """
+        if response:
+            return self.power_transformer.transform(numpy.array(data_list).reshape(-1, 1)).squeeze().tolist()
         return self.standardizer.transform(numpy.array(data_list).reshape(-1, 1)).squeeze().tolist()
 
-    def inverse_transform(self, data_list):
+    def inverse_transform(self, data_list, response=False):
         """
         Inversely transform data to the original scale
         :param data_list:
         :return:
         """
+        if response:
+            return self.power_transformer.inverse_transform(numpy.array(data_list).reshape(-1, 1)).squeeze().tolist()
         return self.standardizer.inverse_transform(numpy.array(data_list).reshape(-1, 1)).squeeze().tolist()
-
 
