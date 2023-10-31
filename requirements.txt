@@ -7,3 +7,4 @@ seaborn
 ipdb
 tqdm
 torchfm
+xgboost

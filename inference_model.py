@@ -7,6 +7,7 @@ from datetime import datetime
 import hydra
 from omegaconf import DictConfig
 import torch
+import xgboost as xgb
 from torchmetrics import MeanAbsoluteError, MeanAbsolutePercentageError
 from torch.utils.data import DataLoader
 from sklearn.utils import shuffle
@@ -76,44 +77,53 @@ def main(cfg: DictConfig):
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
     logging.info(f"Data loader assembled.")
 
-    if cfg.model_stage == 'regression':
-        model = DeepFactorizationMachineRegression(field_dims=dims_categorical_vars,
-                                     embedding_dim=cfg.embedding_dim,
-                                     num_numerical=dim_numerical_vars,
-                                     hidden_units=cfg.hidden_layers).to(device)
+    if cfg.best_model_name == 'xgboost':
+        dtest = xgb.DMatrix(data[list(cfg.categorical_features) + list(cfg.numerical_features)])
+        model = xgb.Booster()
+        model.load_model(os.path.join(cfg.model_fp, f"{cfg.model_stage}_{cfg.best_model_name}_dt_{data_type}_"
+                                                f"tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}.json"))
+        predictions = model.predict(dtest)
+        if cfg.model_stage == 'classification':
+            predictions = list(map(lambda p: 1 if p > 0.5 else 0, predictions))
     else:
-        model = DeepFactorizationMachineClassification(field_dims=dims_categorical_vars,
-                                                       embedding_dim=cfg.embedding_dim,
-                                                       num_numerical=dim_numerical_vars,
-                                                       hidden_units=cfg.hidden_layers,
-                                                       n_classes=len(data[cfg.response_binary].unique()))
-
-    print(os.path.join(cfg.model_fp, f"{cfg.model_stage}_{cfg.best_model_name}_dt_{data_type}_tz_"
-                                                      f"{cfg.target_lower_limit}_{cfg.target_upper_limit}.pth"))
-    model.load_state_dict(torch.load(os.path.join(cfg.model_fp, f"{cfg.model_stage}_{cfg.best_model_name}_dt_{data_type}_tz_"
-                                                      f"{cfg.target_lower_limit}_{cfg.target_upper_limit}.pth")))
-    model.eval()
-
-    with torch.no_grad():  # Disable gradient computation
         if cfg.model_stage == 'regression':
-            predictions = list(map(lambda x: float(x), inference(model, test_loader, device)))
-            y_trues, predictions = standardizer.inverse_transform(data[response], True), standardizer.inverse_transform(predictions, True)
-            predictions = list(map(int, predictions))
-            mae = MeanAbsoluteError()
-            mae = mae(torch.Tensor(predictions), torch.Tensor(y_trues))
-            logging.info(f"Mean inference score: \nMAE: {mae}")
+            model = DeepFactorizationMachineRegression(field_dims=dims_categorical_vars,
+                                         embedding_dim=cfg.embedding_dim,
+                                         num_numerical=dim_numerical_vars,
+                                         hidden_units=cfg.hidden_layers).to(device)
         else:
-            predictions = list(map(lambda x: int(x.argmax()), inference(model, test_loader, device)))
-            f1_micro = f1_score(data[response], predictions, average='micro')
-            f1_macro = f1_score(data[response], predictions, average='macro')
-            precision = precision_score(data[response], predictions, average='weighted')
-            recall = recall_score(data[response], predictions, average='weighted')
-            logging.info(f"Inference scores: \nF1 scores: {f1_micro}, {f1_macro}")
-            logging.info(f"Precision and recall {precision}, {recall}")
+            model = DeepFactorizationMachineClassification(field_dims=dims_categorical_vars,
+                                                           embedding_dim=cfg.embedding_dim,
+                                                           num_numerical=dim_numerical_vars,
+                                                           hidden_units=cfg.hidden_layers,
+                                                           n_classes=len(data[cfg.response_binary].unique()))
+
+        print(os.path.join(cfg.model_fp, f"{cfg.model_stage}_{cfg.best_model_name}_dt_{data_type}_tz_"
+                                                          f"{cfg.target_lower_limit}_{cfg.target_upper_limit}.pth"))
+        model.load_state_dict(torch.load(os.path.join(cfg.model_fp, f"{cfg.model_stage}_{cfg.best_model_name}_dt_{data_type}_tz_"
+                                                          f"{cfg.target_lower_limit}_{cfg.target_upper_limit}.pth")))
+        model.eval()
+
+        with torch.no_grad():  # Disable gradient computation
+            if cfg.model_stage == 'regression':
+                predictions = list(map(lambda x: float(x), inference(model, test_loader, device)))
+                y_trues, predictions = standardizer.inverse_transform(data[response], True), standardizer.inverse_transform(predictions, True)
+                predictions = list(map(int, predictions))
+                mae = MeanAbsoluteError()
+                mae = mae(torch.Tensor(predictions), torch.Tensor(y_trues))
+                logging.info(f"Mean inference score: \nMAE: {mae}")
+            else:
+                predictions = list(map(lambda x: int(x.argmax()), inference(model, test_loader, device)))
+                f1_micro = f1_score(data[response], predictions, average='micro')
+                f1_macro = f1_score(data[response], predictions, average='macro')
+                precision = precision_score(data[response], predictions, average='weighted')
+                recall = recall_score(data[response], predictions, average='weighted')
+                logging.info(f"Inference scores: \nF1 scores: {f1_micro}, {f1_macro}")
+                logging.info(f"Precision and recall {precision}, {recall}")
 
     logging.info(f"Below are the inference results given your input data, shape {len(predictions)}:")
     logging.info(f"Top 100, remaining truncated, \n{predictions[:100]}, mean {numpy.mean(predictions)}")
-    data_original[f'predicted_{cfg.response}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
+    data_original[f'predicted_{cfg.best_model_name}_{cfg.response}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
     if os.path.exists(inference_output_fp): ## append current models results to existing inference CSV.
         results = pandas.read_csv(inference_output_fp)
         results[f'predicted_{cfg.response}_{cfg.model_stage}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions

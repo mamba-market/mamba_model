@@ -146,3 +146,29 @@ def forming_train_and_test_data(batch_size, cfg, data):
     logging.info(f"Data loader assembled.")
     return test_loader, train_loader, train_df, test_df, train_df_original, test_df_original, response_standardizer
 
+
+def form_xgboost_train_and_test_data(cfg, data):
+    data = data.copy()
+    response = cfg.response if cfg.model_stage == 'regression' else cfg.response_binary
+    data['stratify_col'] = data[list(cfg.stratefied_sampling_categories)].apply(lambda x: '_'.join(x.map(str)), axis=1)
+    counts = data['stratify_col'].value_counts()
+    to_remove = counts[counts < 2].index  # remove classes with fewer samples than this
+    data = data[~data['stratify_col'].isin(to_remove)]
+    train_df, test_df = train_test_split(data, test_size=0.2, stratify=data['stratify_col'])
+    train_df.reset_index(inplace=True, drop=True)
+    test_df.reset_index(inplace=True, drop=True)
+    train_df = balance_dataset(train_df, target_column=response)
+    test_df = balance_dataset(test_df, target_column=response)
+    train_df, test_df, train_df_original, test_df_original, response_standardizer = scale_data(cfg, train_df, test_df)
+    logging.info("Sizes of training and testing datasets")
+    stratefied_sampling_categories = list(cfg.stratefied_sampling_categories) + [response]
+    logging.info(f"Training: {len(train_df)} \n {train_df.groupby(stratefied_sampling_categories).size()}")
+    logging.info(f"Testing: {len(test_df)} \n {test_df.groupby(stratefied_sampling_categories).size()}")
+    for stratefied_sampling_category in stratefied_sampling_categories:
+        logging.info(f"Training data value counts on {stratefied_sampling_category}, "
+                     f"{train_df[stratefied_sampling_category].value_counts()}")
+        logging.info(f"Testing data value counts on {stratefied_sampling_category}, "
+                     f"{test_df[stratefied_sampling_category].value_counts()}")
+    logging.info(f"Data loader assembled.")
+    return train_df, test_df, train_df_original, test_df_original, response_standardizer
+
