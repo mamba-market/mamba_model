@@ -43,10 +43,12 @@ def main(cfg: DictConfig):
         data = pandas.read_csv(inference_input_fp)
     else:
         data = pandas.read_pickle(inference_input_fp)
+    logging.info(f"Eliminating {data.isna().any(axis=1).sum()} NA rows...")
+    data = data.loc[~data.isna().any(axis=1), :].copy()
     data_original = data.copy()
     if cfg.response not in data.columns:
         data[cfg.response] = list(range(len(data)))
-        data[cfg.response_binary] = data[cfg.response].apply(lambda x: 0 if x < cfg.classification_target_threshold else 1)
+    data[cfg.response_binary] = data[cfg.response].apply(lambda x: 0 if x < cfg.classification_target_threshold else 1)
 
     # transform categorical data and numerical data with label encoders and standardizers
     for col in cfg.categorical_features:
@@ -62,7 +64,7 @@ def main(cfg: DictConfig):
     standardizer = Standardizer()
     for col in cfg.numerical_features + [cfg.response]:
         standardizer = Standardizer()
-        response_flag = True if col == cfg.response else False
+        response_flag = True if (col == cfg.response) or (col in cfg.skewed_features) else False
         standardizer.fit(training_data[col])
         data[col] = standardizer.transform(data[col], response_flag)
 
@@ -127,6 +129,14 @@ def main(cfg: DictConfig):
     if os.path.exists(inference_output_fp): ## append current models results to existing inference CSV.
         results = pandas.read_csv(inference_output_fp)
         results[f'predicted_{cfg.response}_{cfg.model_stage}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
+        if cfg.model_stage == 'classification': ## correct the regression results by zone
+            col_tz_0_20, col_tz_20_70 = list(filter(lambda x: x.endswith('0_20'), results.columns))[0], \
+                                        list(filter(lambda x: x.endswith('20_70'), results.columns))[0]
+            for i, row in results.iterrows():
+                if results.loc[i, f'predicted_{cfg.response}_{cfg.model_stage}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] == 0:
+                    results.loc[i, col_tz_20_70] = None
+                else:
+                    results.loc[i, col_tz_0_20] = None
         results.to_csv(inference_output_fp, index=False)
     else:
         data_original.to_csv(inference_output_fp, index=False)

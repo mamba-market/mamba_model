@@ -108,7 +108,7 @@ def scale_data(cfg, train_df, test_df):
     standardizer = Standardizer()
     for col in cfg.numerical_features + [cfg.response]:
         standardizer = Standardizer()
-        response_flag = True if col == cfg.response else False
+        response_flag = True if (col == cfg.response) or (col in cfg.skewed_features) else False
         standardizer.fit(train_df[col])
         train_df[col] = standardizer.transform(train_df[col], response_flag)
         test_df[col] = standardizer.transform(test_df[col], response_flag)
