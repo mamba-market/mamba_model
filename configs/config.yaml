@@ -25,7 +25,6 @@ numerical_features:
   - 'fo'
   - 'si'
   - 'ft'
-  - 'ft.1'
   - 'hn'
   - 'bf'
   - 'dk'
@@ -59,19 +58,19 @@ numerical_features:
   - 'host_hs'
   - 'host_bta'
   - 'host_btsr'
-  - 'batting_positionval1_mt'
-  - 'batting_positionval1_inns'
-  - 'batting_positionval1_rn'
-  - 'batting_positionval1_fo'
-  - 'batting_positionval1_si'
-  - 'batting_positionval1_ft'
-  - 'batting_positionval1_hn'
-  - 'batting_positionval1_bf'
-  - 'batting_positionval1_dk'
-  - 'batting_positionval1_times_not_out'
-  - 'batting_positionval1_hs'
-  - 'batting_positionval1_bta'
-  - 'batting_positionval1_btsr'
+#  - 'batting_positionval1_mt'
+#  - 'batting_positionval1_inns'
+#  - 'batting_positionval1_rn'
+#  - 'batting_positionval1_fo'
+#  - 'batting_positionval1_si'
+#  - 'batting_positionval1_ft'
+#  - 'batting_positionval1_hn'
+#  - 'batting_positionval1_bf'
+#  - 'batting_positionval1_dk'
+#  - 'batting_positionval1_times_not_out'
+#  - 'batting_positionval1_hs'
+#  - 'batting_positionval1_bta'
+#  - 'batting_positionval1_btsr'
 
 skewed_features:
   - 'mt'
@@ -80,7 +79,6 @@ skewed_features:
   - 'fo'
   - 'si'
   - 'ft'
-  - 'ft.1'
   - 'hn'
   - 'bf'
   - 'dk'
@@ -108,18 +106,18 @@ skewed_features:
   - 'host_dk'
   - 'host_times_not_out'
   - 'host_hs'
-  - 'batting_positionval1_mt'
-  - 'batting_positionval1_inns'
-  - 'batting_positionval1_rn'
-  - 'batting_positionval1_fo'
-  - 'batting_positionval1_si'
-  - 'batting_positionval1_ft'
-  - 'batting_positionval1_hn'
-  - 'batting_positionval1_bf'
-  - 'batting_positionval1_dk'
-  - 'batting_positionval1_times_not_out'
-  - 'batting_positionval1_hs'
-  - 'batting_positionval1_bta'
+#  - 'batting_positionval1_mt'
+#  - 'batting_positionval1_inns'
+#  - 'batting_positionval1_rn'
+#  - 'batting_positionval1_fo'
+#  - 'batting_positionval1_si'
+#  - 'batting_positionval1_ft'
+#  - 'batting_positionval1_hn'
+#  - 'batting_positionval1_bf'
+#  - 'batting_positionval1_dk'
+#  - 'batting_positionval1_times_not_out'
+#  - 'batting_positionval1_hs'
+#  - 'batting_positionval1_bta'
 
 # response
 response: "target_value"
@@ -132,14 +130,14 @@ loss_plot_fp: "loss_curves"
 confusion_matrix_fp: "confusion_matrix"
 eval_metrics_fp: "eval_metrics"
 
-inference_input_fp: "data/ODI_cricket_inference_data.csv"
+inference_input_fp: "data/match_to_predict.csv"
 
 training_sample_size: null
 # the following two params are fixed to 0 and 70 respectively when model_stage is classification
-target_lower_limit: 0
+target_lower_limit: 21
 target_upper_limit: 70
 
-model_stage: "classification" #"classification" or "regression"
+model_stage: "regression" #"classification" or "regression"
 classification_target_threshold: 20
 minority_sample_limit: 10
 minority_sampling_categories: ["player_id", "target_id", "target_value"]
@@ -148,7 +146,7 @@ stratefied_sampling_categories: ["player_id", "target_id"]
 allowed_initial_loss_diff: 0.5
 
 epoch: 60
-learning_rate: 1e-4
+learning_rate: 1e-6
 batch_size: 16
 weight_decay: 1e-8
 embedding_dim: 20

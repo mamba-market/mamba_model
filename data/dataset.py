@@ -67,15 +67,19 @@ def balance_dataset(df, target_column):
 
     # Iterate over each unique value in target_column
     target_sample_size = int(df.groupby(target_column).size().median())
+    lower_target_sample_size = int(df.groupby(target_column).size().describe().to_dict()['25%'])
+    upper_target_sample_size = int(df.groupby(target_column).size().describe().to_dict()['75%'])
     for value in df[target_column].unique():
         subset = df[df[target_column] == value]
 
-        if len(subset) > target_sample_size:
+        if len(subset) >= upper_target_sample_size:
             # Downsample without replacement
-            resampled_data = subset.sample(target_sample_size, replace=False)
-        else:
+            resampled_data = subset.sample(upper_target_sample_size, replace=False).copy()
+        elif len(subset) <= lower_target_sample_size:
             # Upsample with replacement
-            resampled_data = subset.sample(target_sample_size, replace=True)
+            resampled_data = subset.sample(lower_target_sample_size, replace=True).copy()
+        else:
+            resampled_data = subset.copy()
 
         resampled_df = pandas.concat([resampled_df, resampled_data], axis=0)
 

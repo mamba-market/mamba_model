@@ -8,3 +8,4 @@ ipdb
 tqdm
 torchfm
 xgboost
+prophet
