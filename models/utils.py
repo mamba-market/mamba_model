@@ -192,7 +192,7 @@ def plot_f1_score_and_confusion_matrix(true_labels, predicted_labels, class_name
     recall = recall_score(true_labels, predicted_labels, average='weighted')
 
     # Compute confusion matrix
-    conf_matrix = confusion_matrix(true_labels, predicted_labels, labels=list(range(len(class_names))))
+    conf_matrix = confusion_matrix(true_labels, predicted_labels, labels=class_names)
 
     # Display confusion matrix
     title = f'F1 (Micro): {f1_micro:.4f}, F1 (Macro): {f1_macro:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}'

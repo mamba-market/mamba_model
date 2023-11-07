@@ -14,7 +14,7 @@ from sklearn.utils import shuffle
 from sklearn.metrics import f1_score, precision_score, recall_score
 from data.dataset import CriketScoreDataSetWithCatAndNum
 from models.attention_fm import DeepFactorizationMachineClassification, DeepFactorizationMachineRegression
-from models.utils import inference, LabelEncoderExt, Standardizer, assemble_true_labels_and_predictions
+from models.utils import inference, LabelEncoder, LabelEncoderExt, Standardizer, assemble_true_labels_and_predictions
 
 logging.basicConfig(level=logging.INFO)
 
@@ -47,10 +47,9 @@ def main(cfg: DictConfig):
     data = data.loc[~data.isna().any(axis=1), :].copy()
     data.reset_index(inplace=True, drop=True)
     data_original = data.copy()
-    if cfg.response not in data.columns:
-        data[cfg.response] = list(range(len(data)))
-    data[cfg.response_binary] = data[cfg.response].apply(lambda x: 0 if x < cfg.classification_target_threshold else 1)
-
+    bins = pandas.IntervalIndex.from_breaks(list(cfg.classification_target_threshold), closed='left')
+    training_data[cfg.response_binary] = pandas.cut(training_data[cfg.response], bins=bins, labels=list(map(str, bins)))
+    training_data[cfg.response_binary] = training_data[cfg.response_binary].apply(str)
     # transform categorical data and numerical data with label encoders and standardizers
     for col in cfg.categorical_features:
         # training_data[col] = training_data[col].astype('str')
@@ -62,13 +61,19 @@ def main(cfg: DictConfig):
         except Exception:
             logging.warning(f"Unseen categorical variable level {col}:, \n"
                             f"{set(data[col].unique()) - set(training_data[col].unique())}")
+    le = LabelEncoder()
+    le.fit(training_data[cfg.response_binary])
+    if cfg.response not in data.columns:
+        data[cfg.response] = numpy.random.choice([cfg.target_lower_limit, cfg.target_upper_limit - 1], len(data))
+    data[cfg.response_binary] = numpy.random.choice(list(range(len(le.classes_))), len(data))
+
     standardizer = Standardizer()
     for col in cfg.numerical_features + [cfg.response]:
         standardizer = Standardizer()
         response_flag = True if (col == cfg.response) or (col in cfg.skewed_features) else False
         standardizer.fit(training_data[col])
         data[col] = standardizer.transform(data[col], response_flag)
-
+    response_scaler = le if cfg.model_stage == 'classification' else standardizer
     dims_categorical_vars = list(map(int, [training_data[col].max() + 1 for col in cfg.categorical_features]))
     dim_numerical_vars = len(cfg.numerical_features)
     print(dims_categorical_vars)
@@ -110,37 +115,39 @@ def main(cfg: DictConfig):
         with torch.no_grad():  # Disable gradient computation
             if cfg.model_stage == 'regression':
                 predictions = list(map(lambda x: float(x), inference(model, test_loader, device)))
-                y_trues, predictions = standardizer.inverse_transform(data[response], True), standardizer.inverse_transform(predictions, True)
+                y_trues, predictions = response_scaler.inverse_transform(data[response], True), response_scaler.inverse_transform(predictions, True)
                 predictions = list(map(int, predictions))
                 mae = MeanAbsoluteError()
                 mae = mae(torch.Tensor(predictions), torch.Tensor(y_trues))
                 logging.info(f"Mean inference score: \nMAE: {mae}")
             else:
                 predictions = list(map(lambda x: int(x.argmax()), inference(model, test_loader, device)))
-                f1_micro = f1_score(data[response], predictions, average='micro')
-                f1_macro = f1_score(data[response], predictions, average='macro')
-                precision = precision_score(data[response], predictions, average='weighted')
-                recall = recall_score(data[response], predictions, average='weighted')
-                logging.info(f"Inference scores: \nF1 scores: {f1_micro}, {f1_macro}")
-                logging.info(f"Precision and recall {precision}, {recall}")
+                predictions = response_scaler.inverse_transform(predictions)
+                # import ipdb; ipdb.set_trace()
+                # f1_micro = f1_score(data[response], predictions, average='micro')
+                # f1_macro = f1_score(data[response], predictions, average='macro')
+                # precision = precision_score(data[response], predictions, average='weighted')
+                # recall = recall_score(data[response], predictions, average='weighted')
+                # logging.info(f"Inference done: \nF1 scores: {f1_micro}, {f1_macro}")
+                # logging.info(f"Precision and recall {precision}, {recall}")
 
     logging.info(f"Below are the inference results given your input data, shape {len(predictions)}:")
-    logging.info(f"Top 100, remaining truncated, \n{predictions[:100]}, mean {numpy.mean(predictions)}")
+    logging.info(f"Top 100, remaining truncated, \n{predictions[:100]}.")
     data_original[f'predicted_{cfg.best_model_name}_{cfg.response}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
     if os.path.exists(inference_output_fp): ## append current models results to existing inference CSV.
         results = pandas.read_csv(inference_output_fp)
         results[f'predicted_{cfg.response}_{cfg.model_stage}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
-        if cfg.model_stage == 'classification': ## correct the regression results by zone
-            col_tz_0_20, col_tz_20_70 = list(filter(lambda x: x.endswith('0_20'), results.columns))[0], \
-                                        list(filter(lambda x: x.endswith('21_70'), results.columns))[0]
-            results['aggregated_regression_preds'] = None
-            for i, row in results.iterrows():
-                if results.loc[i, f'predicted_{cfg.response}_{cfg.model_stage}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] == 0:
-                    results.loc[i, col_tz_20_70] = None
-                    results.loc[i, 'aggregated_regression_preds'] = results.loc[i, col_tz_0_20]
-                else:
-                    results.loc[i, col_tz_0_20] = None
-                    results.loc[i, 'aggregated_regression_preds'] = results.loc[i, col_tz_20_70]
+        # if cfg.model_stage == 'classification': ## correct the regression results by zone
+        #     col_tz_0_20, col_tz_20_70 = list(filter(lambda x: x.endswith('0_20'), results.columns))[0], \
+        #                                 list(filter(lambda x: x.endswith('21_70'), results.columns))[0]
+        #     results['aggregated_regression_preds'] = None
+        #     for i, row in results.iterrows():
+        #         if results.loc[i, f'predicted_{cfg.response}_{cfg.model_stage}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] == 0:
+        #             results.loc[i, col_tz_20_70] = None
+        #             results.loc[i, 'aggregated_regression_preds'] = results.loc[i, col_tz_0_20]
+        #         else:
+        #             results.loc[i, col_tz_0_20] = None
+        #             results.loc[i, 'aggregated_regression_preds'] = results.loc[i, col_tz_20_70]
         results.to_csv(inference_output_fp, index=False)
     else:
         data_original.to_csv(inference_output_fp, index=False)

@@ -62,9 +62,12 @@ def main(cfg: DictConfig):
     logging.info(f"Data size after stratified sampling {len(data)}")
     logging.info(f"{data.describe()}")
     data = shuffle(data)
-    data[cfg.response_binary] = data[cfg.response].apply(lambda x: 0 if x < cfg.classification_target_threshold else 1)
+    bins = pandas.IntervalIndex.from_breaks(list(cfg.classification_target_threshold), closed='left')
+    data[cfg.response_binary] = pandas.cut(data[cfg.response], bins=bins, labels=list(map(str, bins)))
+    data[cfg.response_binary] = data[cfg.response_binary].apply(str)
+    data = data.loc[~data.isna().any(axis=1), :].copy()
     data.reset_index(inplace=True, drop=True)
-    test_loader, train_loader, train_df, test_df, train_df_original, test_df_original, response_standardizer = forming_train_and_test_data(batch_size, cfg, data)
+    test_loader, train_loader, train_df, test_df, train_df_original, test_df_original, response_scaler = forming_train_and_test_data(batch_size, cfg, data)
     criterion, early_stopper, model, optimizer = construct_model(cfg, data_type, device, learning_rate, train_df,
                                                                  weight_decay)
     logging.info("Model successfully initialized.")
@@ -73,7 +76,7 @@ def main(cfg: DictConfig):
     loss_discrepency = float('inf')
     while abs(loss_discrepency) > cfg.allowed_initial_loss_diff:
         logging.info(f"Regenerating test and train data to offset initial loss diff {loss_discrepency}...")
-        test_loader, train_loader, train_df, test_df, train_df_original, test_df_original, response_standardizer = forming_train_and_test_data(batch_size,
+        test_loader, train_loader, train_df, test_df, train_df_original, test_df_original, response_scaler = forming_train_and_test_data(batch_size,
                                                                                                           cfg, data)
         criterion, early_stopper, model, optimizer = construct_model(cfg, data_type, device, learning_rate,
                                                                      train_df, weight_decay)
@@ -103,7 +106,7 @@ def main(cfg: DictConfig):
     f"{cfg.model_stage}_{cfg.loss_plot_fp}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}")
     y_trues, y_preds = assemble_true_labels_and_predictions(model, test_loader, device)
     if cfg.model_stage == 'regression':
-        y_trues, y_preds = response_standardizer.inverse_transform(y_trues, True), response_standardizer.inverse_transform(y_preds, True)
+        y_trues, y_preds = response_scaler.inverse_transform(y_trues, True), response_scaler.inverse_transform(y_preds, True)
         metrics = evaluate_regression(y_trues, y_preds, convert_to_int=True)
         logging.info(f'y_trues: {y_trues[:30]}')
         logging.info(f"y_preds: {y_preds[:30]}")
@@ -113,7 +116,8 @@ def main(cfg: DictConfig):
                 print(f"{key}: {value:.4f}")
                 f.write('%s:%s\n' % (key, value))
     else:
-        y_trues, y_preds = y_trues, list(map(lambda x: x.argmax(), y_preds))
+        y_trues, y_preds = response_scaler.inverse_transform(y_trues), \
+                           response_scaler.inverse_transform(list(map(lambda x: x.argmax(), y_preds)))
         logging.info(f'y_trues: {y_trues[:30]}')
         logging.info(f"y_preds: {y_preds[:30]}")
         plot_f1_score_and_confusion_matrix(y_trues, y_preds, sorted(data[cfg.response_binary].unique()),
@@ -127,7 +131,6 @@ def construct_model(cfg, data_type, device, learning_rate, train_df, weight_deca
     logging.info(f"Total dims of categorical vars: \n{dims_categorical_vars}")
     logging.info(f"Dim of numerical vars: \n{dim_numerical_vars}")
     logging.info(f"Range of target value: {train_df[cfg.response].min(), train_df[cfg.response].max()}")
-    # import ipdb; ipdb.set_trace()
     # model initialization
     if cfg.model_stage == 'regression':
         model = DeepFactorizationMachineRegression(field_dims=dims_categorical_vars,

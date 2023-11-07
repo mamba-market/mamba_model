@@ -4,7 +4,7 @@ import numpy as np
 import pandas
 import torch
 from torch.utils.data import DataLoader, Dataset
-from models.utils import LabelEncoderExt, Standardizer
+from models.utils import LabelEncoderExt, Standardizer, LabelEncoder
 from sklearn.model_selection import train_test_split
 
 logging.basicConfig(level=logging.INFO)
@@ -106,9 +106,11 @@ def scale_data(cfg, train_df, test_df):
             logging.warning(f"Unseen categorical variable level {col}:, \n"
                             f"{set(test_df[col].unique()) - set(train_df[col].unique())}")
 
-    # le = LabelEncoder()
-    # data[cfg.response_binary] = le.fit_transform(data[cfg.response_binary])
-    # logging.info(f"Classes of response: {le.classes_}")
+    le = LabelEncoder()
+    le.fit(train_df[cfg.response_binary])
+    train_df[cfg.response_binary] = le.transform(train_df[cfg.response_binary])
+    test_df[cfg.response_binary] = le.transform(test_df[cfg.response_binary])
+    logging.info(f"Classes of response: {le.classes_}")
     standardizer = Standardizer()
     for col in cfg.numerical_features + [cfg.response]:
         standardizer = Standardizer()
@@ -116,8 +118,8 @@ def scale_data(cfg, train_df, test_df):
         standardizer.fit(train_df[col])
         train_df[col] = standardizer.transform(train_df[col], response_flag)
         test_df[col] = standardizer.transform(test_df[col], response_flag)
-    response_standardizer = standardizer
-    return train_df, test_df, train_df_original, test_df_original, response_standardizer
+    response_scaler = standardizer if cfg.model_stage == 'regression' else le
+    return train_df, test_df, train_df_original, test_df_original, response_scaler
 
 
 def forming_train_and_test_data(batch_size, cfg, data):
