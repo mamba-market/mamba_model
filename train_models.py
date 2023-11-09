@@ -44,7 +44,7 @@ def main(cfg: DictConfig):
         data = pandas.read_pickle(input_fp)
     # eliminating any NAs rows
     logging.info(f"Eliminating {data.isna().any(axis=1).sum()} NA rows...")
-    data = data.loc[~data.isna().any(axis=1), :].copy()
+    data = data.loc[~data[list(cfg.categorical_features) + list(cfg.numerical_features) + [cfg.response]].isna().any(axis=1)].copy()
     # stratified sampling weights
     logging.info(f"Data size before filtering {len(data)}")
     data = data[data[cfg.response] >= cfg.target_lower_limit].copy()

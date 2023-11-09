@@ -44,7 +44,7 @@ def main(cfg: DictConfig):
     else:
         data = pandas.read_pickle(inference_input_fp)
     logging.info(f"Eliminating {data.isna().any(axis=1).sum()} NA rows...")
-    data = data.loc[~data.isna().any(axis=1), :].copy()
+    data = data.loc[~data[list(cfg.categorical_features) + list(cfg.numerical_features)].isna().any(axis=1)].copy()
     data.reset_index(inplace=True, drop=True)
     data_original = data.copy()
     bins = pandas.IntervalIndex.from_breaks(list(cfg.classification_target_threshold), closed='left')
