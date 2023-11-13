@@ -123,7 +123,7 @@ skewed_features:
 response: "target_value"
 response_binary: "target_value_binary"
 
-training_input_fp: "data/ODI_cricket_training_data.csv"
+training_input_fp: "data/ODI_cricket_traning_data.csv"
 model_fp: "chkpt"
 best_model_name: 'factorization_machine'
 loss_plot_fp: "loss_curves"
