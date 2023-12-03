@@ -137,7 +137,7 @@ training_sample_size: null
 target_lower_limit: 0
 target_upper_limit: 70
 
-model_stage: "classification" #"classification" or "regression"
+model_stage: "regression" #"classification" or "regression"
 classification_target_threshold: [0, 20, 70]
 minority_sample_limit: 10
 minority_sampling_categories: ["player_id", "target_id", "target_value"]

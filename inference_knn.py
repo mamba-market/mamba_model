@@ -24,6 +24,7 @@ def main(cfg: DictConfig):
         "data/")
     data_type = 'ODI'
     training_input_fp = f"data/{data_type}_sampled_cricket_training_data_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}.csv"
+    training_input_fp = "data/ODI_cricket_traning_data.csv"
     inference_output_fp = f"inference_results/game_preds_{datetime.strftime(datetime.utcnow(), '%Y-%m-%d')}.csv"
     cfg.best_model_name = 'knn'
 
@@ -32,7 +33,13 @@ def main(cfg: DictConfig):
         training_data = pandas.read_csv(training_input_fp)
     else:
         training_data = pandas.read_pickle(training_input_fp)
-
+    training_data = training_data.loc[
+        ~training_data[list(cfg.categorical_features) + list(cfg.numerical_features) + [cfg.response]].isna().any(
+            axis=1)].copy()
+    logging.info(f"Data size before filtering {len(training_data)}")
+    training_data = training_data[training_data[cfg.response] >= cfg.target_lower_limit].copy()
+    training_data = training_data[training_data[cfg.response] <= cfg.target_upper_limit].copy()
+    logging.info((f"Data size after filtering {len(training_data)}"))
     if inference_input_fp.endswith('.csv'):
         data = pandas.read_csv(inference_input_fp)
     else:
@@ -53,12 +60,17 @@ def main(cfg: DictConfig):
         curr_data = data[data['player_id'] == player].copy()
         if player in training_data['player_id'].unique().tolist():
             curr_training_data = training_data[training_data['player_id'] == player].copy()
-            logging.info(f"Found player, training data breaking down from {len(training_data)} to {len(curr_training_data)} records..")
             training_support = len(curr_training_data)
+            if training_support <= 5:
+                curr_training_data = training_data.copy()
+                logging.warning(f"Found player but support is so low: {player}, using the whole training data instead..")
+            logging.info(
+                f"Found player, training data breaking down from {len(training_data)} to {len(curr_training_data)} records..")
         else:
             curr_training_data = training_data.copy()
             training_support = 0
             logging.warning(f"Unfound player id: {player}, using the whole training data instead..")
+        curr_training_data = curr_training_data.loc[~curr_training_data.isna().any(axis=1), :].copy()
         curr_data['training_support'] = training_support
         preprocessor = ColumnTransformer(
             transformers=[
