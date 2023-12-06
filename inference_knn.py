@@ -61,9 +61,9 @@ def main(cfg: DictConfig):
         if player in training_data['player_id'].unique().tolist():
             curr_training_data = training_data[training_data['player_id'] == player].copy()
             training_support = len(curr_training_data)
-            if training_support <= 5:
+            if training_support <= 10:
                 curr_training_data = training_data.copy()
-                logging.warning(f"Found player but support is so low: {player}, using the whole training data instead..")
+                logging.warning(f"Found player: {player} but support is so low, using the whole training data instead..")
             logging.info(
                 f"Found player, training data breaking down from {len(training_data)} to {len(curr_training_data)} records..")
         else:
