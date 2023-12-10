@@ -17,6 +17,32 @@ from sklearn.pipeline import Pipeline
 logging.basicConfig(level=logging.INFO)
 
 
+class KNNClassifierMedian(KNeighborsClassifier):
+    def predict(self, X):
+        # Find the nearest neighbors for each sample in X
+        neigh_dist, neigh_ind = self.kneighbors(X)
+
+        # Extract the neighbors' targets
+        neigh_targets = self._y[neigh_ind]
+        median_indices = numpy.median(neigh_targets, axis=1).astype(int)
+        unique_classes = self.classes_
+        median_classes = unique_classes[median_indices]
+
+        return median_classes
+
+
+class KNNRegressorMedian(KNeighborsRegressor):
+    def predict(self, X):
+        # Find the nearest neighbors for each sample in X
+        neigh_dist, neigh_ind = self.kneighbors(X)
+
+        # Extract the neighbors' targets
+        neigh_targets = self._y[neigh_ind]
+
+        # Use the median instead of the mean
+        return numpy.median(neigh_targets, axis=1)
+
+
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: DictConfig):
     inference_input_fp = cfg.inference_input_fp
@@ -46,6 +72,7 @@ def main(cfg: DictConfig):
         data = pandas.read_pickle(inference_input_fp)
     logging.info(f"Eliminating {data.isna().any(axis=1).sum()} NA rows...")
     data = data.loc[~data[list(cfg.categorical_features) + list(cfg.numerical_features)].isna().any(axis=1)].copy()
+    data = data.loc[data['target_id'] == 1].copy()
     data.reset_index(inplace=True, drop=True)
     data_original = data.copy()
     bins = pandas.IntervalIndex.from_breaks(list(cfg.classification_target_threshold), closed='left')
@@ -80,13 +107,13 @@ def main(cfg: DictConfig):
 
         if cfg.model_stage == 'regression':
             knn_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
-                                           ('regressor', KNeighborsRegressor(n_neighbors=5))])
+                                           ('regressor', KNNRegressorMedian(n_neighbors=5))])
 
             # Fitting the model
             response_col = cfg.response
         else:
             knn_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
-                                           ('regressor', KNeighborsClassifier(n_neighbors=5))])
+                                           ('regressor', KNNClassifierMedian(n_neighbors=5))])
             response_col = cfg.response_binary
         knn_pipeline.fit(curr_training_data[list(cfg.numerical_features) + list(cfg.categorical_features)], curr_training_data[response_col])
         predictions_for_this_player = knn_pipeline.predict(curr_data[list(cfg.numerical_features) + list(cfg.categorical_features)])
@@ -99,7 +126,7 @@ def main(cfg: DictConfig):
     if os.path.exists(inference_output_fp): ## append current models results to existing inference CSV.
         results = pandas.read_csv(inference_output_fp)
     else:
-        results = data_original
+        results = data_original[['player_id', 'target_id']]
     results[f'predicted_{cfg.best_model_name}_{cfg.model_stage}_dt_{data_type}_tz_{cfg.target_lower_limit}_{cfg.target_upper_limit}'] = predictions
     results['training_support'] = training_supports
     results.to_csv(inference_output_fp, index=False)
