@@ -130,14 +130,14 @@ loss_plot_fp: "loss_curves"
 confusion_matrix_fp: "confusion_matrix"
 eval_metrics_fp: "eval_metrics"
 
-inference_input_fp: "data/match_to_predict.csv"
+inference_input_fp: "data/match_to_predict_2023-12-21_wi_vs_eng.csv"
 
 training_sample_size: null
 # the following two params are fixed to 0 and 70 respectively when model_stage is classification
 target_lower_limit: 0
 target_upper_limit: 70
 
-model_stage: "regression" #"classification" or "regression"
+model_stage: "classification" #"classification" or "regression"
 classification_target_threshold: [0, 20, 70]
 minority_sample_limit: 10
 minority_sampling_categories: ["player_id", "target_id", "target_value"]

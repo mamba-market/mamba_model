@@ -107,13 +107,13 @@ def main(cfg: DictConfig):
 
         if cfg.model_stage == 'regression':
             knn_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
-                                           ('regressor', KNNRegressorMedian(n_neighbors=5))])
+                                           ('regressor', KNeighborsRegressor(n_neighbors=3))])
 
             # Fitting the model
             response_col = cfg.response
         else:
             knn_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
-                                           ('regressor', KNNClassifierMedian(n_neighbors=5))])
+                                           ('regressor', KNeighborsClassifier(n_neighbors=3))])
             response_col = cfg.response_binary
         knn_pipeline.fit(curr_training_data[list(cfg.numerical_features) + list(cfg.categorical_features)], curr_training_data[response_col])
         predictions_for_this_player = knn_pipeline.predict(curr_data[list(cfg.numerical_features) + list(cfg.categorical_features)])
