@@ -31,7 +31,7 @@ def get_dataset(name, path):
 
 def get_model(name, dataset):
     """
-    Hyperparameters are empirically determined, not opitmized.
+    Hyperparameters are empirically determined, not optimized.
     """
     field_dims = dataset.field_dims
     if name == 'fm':
